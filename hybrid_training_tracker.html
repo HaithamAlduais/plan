@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hybrid Training Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        gray: { 850: '#1f2937', 900: '#111827', 950: '#030712' },
+                        neon: { DEFAULT: '#3b82f6', hover: '#60a5fa' }, // Blue accent
+                        power: { DEFAULT: '#fbbf24' } // Yellow for power
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #030712; color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
+
+        .superset-bracket { position: relative; }
+        .superset-bracket::before {
+            content: ''; position: absolute; left: -12px; top: 20px; bottom: 20px;
+            width: 4px; background-color: #374151; border-radius: 4px;
+        }
+        
+        .check-wrap { position: relative; width: 28px; height: 28px; }
+        .custom-checkbox {
+            appearance: none; width: 100%; height: 100%;
+            background: #1f2937; border: 2px solid #4b5563;
+            border-radius: 8px; cursor: pointer; transition: all 0.2s;
+        }
+        .custom-checkbox:checked { background: #10b981; border-color: #10b981; }
+        .custom-checkbox:checked::after {
+            content: '\f00c'; font-family: 'Font Awesome 6 Free'; font-weight: 900;
+            position: absolute; color: white; font-size: 14px;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+        }
+
+        .exercise-card { transition: all 0.2s ease; }
+        .exercise-card.completed { opacity: 0.5; }
+        .exercise-card.completed .ex-name { text-decoration: line-through; color: #9ca3af; }
+
+        .track-input {
+            background: #374151; border: 1px solid #4b5563; color: white;
+            border-radius: 6px; padding: 4px 8px; width: 70px; text-align: center;
+            font-size: 0.85rem; outline: none; transition: border-color 0.2s;
+        }
+        .track-input:focus { border-color: #3b82f6; }
+        
+        .tab-btn { transition: all 0.3s; }
+        .tab-btn.active { color: white; border-bottom: 2px solid #3b82f6; }
+    </style>
+</head>
+<body class="antialiased pb-20">
+
+<div class="max-w-md mx-auto min-h-screen bg-gray-900 relative shadow-2xl">
+    
+    <!-- Header -->
+    <header class="bg-gray-950 px-5 pt-8 pb-4 sticky top-0 z-50">
+        <h1 class="text-2xl font-extrabold tracking-tight text-white mb-1">HYBRID <span class="text-neon">PLAN</span></h1>
+        <p class="text-xs text-gray-400 mb-4">Weight = bottom reps with 1–2 RIR. No failure.</p>
+        <a href="code_artifact.html" class="mb-4 inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-lg bg-neon px-4 py-2 text-sm font-bold text-white transition hover:bg-neon-hover">
+            <i class="fa-solid fa-list-check"></i>
+            Daily Task Schedule
+        </a>
+        
+        <!-- Tabs -->
+        <div class="flex justify-between text-sm font-semibold text-gray-500 border-b border-gray-800" id="tabs-container">
+            <button class="tab-btn active pb-2 flex-1 text-center" data-tab="tue">TUE</button>
+            <button class="tab-btn pb-2 flex-1 text-center" data-tab="thu">THU</button>
+            <button class="tab-btn pb-2 flex-1 text-center" data-tab="fri">FRI</button>
+            <button class="tab-btn pb-2 flex-1 text-center" data-tab="info"><i class="fa-solid fa-circle-info pointer-events-none"></i></button>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="p-5" id="main-content">
+        <!-- Content will be injected dynamically -->
+    </main>
+
+</div>
+
+<script>
+    const planData = {
+        tue: {
+            title: "GYM A",
+            exercises: [
+                { id: 'tue-p', order: 'P', name: 'Box jump / vertical jump', sets: '3×3', rest: '60-120s', rule: 'Fast 2 weeks → higher/harder' },
+                { id: 'tue-1a', order: '1A', name: 'Leg press/hack squat', sets: '3×5–8', rest: 'Pair A1→A2', rule: 'Top → +5kg' },
+                { id: 'tue-1b', order: '1B', name: 'Pulldown/assisted pull-up', sets: '3×6–10', rest: '2min after pair', rule: 'Top → +5kg/less assist' },
+                { id: 'tue-2a', order: '2A', name: 'Incline DB press', sets: '3×6–10', rest: 'Pair A1→A2', rule: 'Top → +2–2.5kg/hand' },
+                { id: 'tue-2b', order: '2B', name: 'RDL', sets: '2×6–10', rest: '2min after pair', rule: 'Top → +5kg' },
+                { id: 'tue-3a', order: '3A', name: 'Pushdown/assisted dip', sets: '2×10–15 / 8–12', rest: 'Pair', rule: 'Top → +2.5–5kg' },
+                { id: 'tue-3b', order: '3B', name: 'Cable curl', sets: '2×10–15', rest: '60-75s after pair', rule: 'Top → +2.5kg' },
+                { id: 'tue-4a', order: '4A', name: 'Lateral raise', sets: '2×12–20', rest: 'Pair', rule: 'Top → +1–2kg' },
+                { id: 'tue-4b', order: '4B', name: 'Hollow/dead bug/Pallof', sets: '2×20–40s / 10–15', rest: '60-75s after pair', rule: 'Top → +5s/harder' }
+            ]
+        },
+        thu: {
+            title: "GYM B",
+            exercises: [
+                { id: 'thu-p', order: 'P', name: 'Med-ball chest throw / exp. push-up', sets: '3×4', rest: '60-120s', rule: 'Fast 2 weeks → harder' },
+                { id: 'thu-1a', order: '1A', name: 'Flat DB press', sets: '3×6–10', rest: 'Pair A1→A2', rule: 'Top → +2–2.5kg/hand' },
+                { id: 'thu-1b', order: '1B', name: 'Chest-supported/cable row', sets: '3×6–10', rest: '2min after pair', rule: 'Top → +5kg' },
+                { id: 'thu-2a', order: '2A', name: 'Bulgarian split squat', sets: '2×8–10/leg', rest: 'Pair A1→A2', rule: 'Top → +2–4kg total' },
+                { id: 'thu-2b', order: '2B', name: 'Calf raise', sets: '2–3×10–20', rest: '2min after pair', rule: 'Top → +5–10kg' },
+                { id: 'thu-3a', order: '3A', name: 'Hip thrust', sets: '2×8–12', rest: 'Pair', rule: 'Top → +5–10kg' },
+                { id: 'thu-3b', order: '3B', name: 'Rear delt/face pull', sets: '2×12–20', rest: '60-75s after pair', rule: 'Top → +2.5kg' },
+                { id: 'thu-4a', order: '4A', name: 'Ham curl', sets: '2×10–15', rest: 'Pair', rule: 'Top → +2.5–5kg' },
+                { id: 'thu-4b', order: '4B', name: 'Hammer curl', sets: '2×8–12', rest: '60-75s after pair', rule: 'Top → +2kg/hand' }
+            ]
+        },
+        fri: {
+            title: "SKILL C",
+            exercises: [
+                { id: 'fri-w', order: 'W', name: 'Prep wrists/shoulders/scap/hips', sets: '8 min', rest: 'Warmup', rule: 'Mobility focus' },
+                { id: 'fri-p', order: 'P', name: 'Explosive band pull-up/high pull', sets: '3×2–4', rest: '60-120s', rule: 'Fast 2 wks → less band/higher' },
+                { id: 'fri-1', order: 'S1', name: 'Handstand line', sets: '5–8 clean sets', rest: '10–30s holds', rule: '+5s total/week' },
+                { id: 'fri-2', order: 'S2', name: 'Pull-up skill', sets: '3–4×3–8 or 10–30s', rest: 'Skill focus', rule: 'Quality over reps' },
+                { id: 'fri-3', order: 'S3', name: 'Support/muscle-up drill', sets: '3×3–6 or 5–20s', rest: 'Skill focus', rule: 'No ugly reps' },
+                { id: 'fri-4', order: 'S4', name: 'L-sit/front lever', sets: '3×8–20s or 3×3–6', rest: 'Core focus', rule: 'Maintain form' },
+                { id: 'fri-5', order: 'S5', name: 'Pistol path', sets: '2×5/leg', rest: 'Balance', rule: 'Smooth reps' }
+            ]
+        }
+    };
+
+    const STORAGE_KEY_LOGS = 'hybrid_plan_logs_v2';
+    const STORAGE_KEY_DATE = 'hybrid_plan_date_v2';
+    const STORAGE_KEY_DONE = 'hybrid_plan_done_v2';
+
+    let userLogs = {};
+    let doneToday = {};
+
+    function safeGet(key) {
+        try {
+            const val = localStorage.getItem(key);
+            return val ? JSON.parse(val) : null;
+        } catch(e) { return null; }
+    }
+
+    function safeSet(key, val) {
+        try { localStorage.setItem(key, JSON.stringify(val)); } 
+        catch(e) {} // Fail silently if storage is blocked
+    }
+    
+    function safeGetDate() {
+        try { return localStorage.getItem(STORAGE_KEY_DATE); } 
+        catch(e) { return null; }
+    }
+    function safeSetDate(val) {
+        try { localStorage.setItem(STORAGE_KEY_DATE, val); } 
+        catch(e) {}
+    }
+
+    function checkDailyReset() {
+        const todayStr = new Date().toDateString();
+        const lastDate = safeGetDate();
+        
+        userLogs = safeGet(STORAGE_KEY_LOGS) || {};
+        
+        if (lastDate !== todayStr) {
+            // New day detected: reset checkboxes
+            doneToday = {};
+            safeSet(STORAGE_KEY_DONE, doneToday);
+            safeSetDate(todayStr);
+        } else {
+            // Same day: load existing checkboxes
+            doneToday = safeGet(STORAGE_KEY_DONE) || {};
+        }
+    }
+
+    function saveData() {
+        safeSet(STORAGE_KEY_LOGS, userLogs);
+        safeSet(STORAGE_KEY_DONE, doneToday);
+    }
+
+    function renderWorkout(dayId) {
+        const data = planData[dayId];
+        let html = `<div class="mb-6 flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-white">${data.title}</h2>
+                    </div>`;
+
+        data.exercises.forEach((ex) => {
+            const isPower = ex.order === 'P';
+            const isSuperset = ex.order.includes('A') || ex.order.includes('B');
+            let bracketClass = '';
+            
+            if (isSuperset) {
+                if (ex.order.includes('A')) bracketClass = 'superset-bracket ml-4';
+                else if (ex.order.includes('B')) bracketClass = 'superset-bracket ml-4 border-l-0';
+            }
+
+            const isDone = doneToday[ex.id] || false;
+            const logW = userLogs[ex.id]?.weight || '';
+            const logR = userLogs[ex.id]?.reps || '';
+
+            let badgeColor = 'bg-neon text-white'; // default
+            if (isPower) badgeColor = 'bg-power text-black';
+            else if (isSuperset) badgeColor = 'bg-gray-700 text-white';
+
+            html += `
+                <div class="exercise-card bg-gray-850 p-4 rounded-xl mb-3 border border-gray-800 ${isDone ? 'completed' : ''} ${bracketClass}" id="card-${ex.id}">
+                    <div class="flex justify-between items-start gap-3">
+                        <div class="flex-shrink-0 mt-1">
+                            <span class="${badgeColor} text-xs font-extrabold px-2 py-1 rounded w-8 inline-block text-center">${ex.order}</span>
+                        </div>
+                        <div class="flex-grow">
+                            <h3 class="ex-name font-bold text-gray-100 leading-tight mb-1">${ex.name}</h3>
+                            <div class="text-xs text-gray-400 flex flex-wrap gap-2 mb-2">
+                                <span class="bg-gray-800 px-2 py-0.5 rounded"><i class="fa-solid fa-repeat mr-1"></i>${ex.sets}</span>
+                                <span class="bg-gray-800 px-2 py-0.5 rounded"><i class="fa-solid fa-stopwatch mr-1"></i>${ex.rest}</span>
+                            </div>
+                            <div class="text-xs text-neon font-medium mt-1">
+                                <i class="fa-solid fa-arrow-trend-up mr-1"></i>${ex.rule}
+                            </div>
+                        </div>
+                        <div class="check-wrap flex-shrink-0">
+                            <!-- Removed inline onchange, using event delegation instead -->
+                            <input type="checkbox" class="custom-checkbox ex-checkbox" data-id="${ex.id}" ${isDone ? 'checked' : ''}>
+                        </div>
+                    </div>
+                    
+                    ${ex.order !== 'W' ? `
+                    <div class="mt-4 pt-3 border-t border-gray-800 flex justify-end gap-2">
+                        <input type="text" placeholder="kg/lbs" class="track-input weight-input" data-id="${ex.id}" value="${logW}">
+                        <input type="text" placeholder="reps/sec" class="track-input reps-input" data-id="${ex.id}" value="${logR}">
+                    </div>` : ''}
+                </div>
+            `;
+        });
+
+        document.getElementById('main-content').innerHTML = html;
+    }
+
+    function renderInfo() {
+        const html = `
+            <div class="space-y-6 pb-6">
+                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
+                    <h3 class="text-lg font-bold text-neon mb-3"><i class="fa-solid fa-scale-balanced mr-2"></i>Global Rules</h3>
+                    <ul class="text-sm text-gray-300 space-y-2 list-disc pl-4">
+                        <li><strong>No ugly reps.</strong> No failed compounds.</li>
+                        <li><strong>Power:</strong> Never grind. If speed drops → stop.</li>
+                        <li><strong>Skills:</strong> Stop at ~20% quality drop.</li>
+                        <li><strong>Pain/form loss:</strong> Keep same weight or drop 5%.</li>
+                    </ul>
+                </section>
+
+                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
+                    <h3 class="text-lg font-bold text-power mb-3"><i class="fa-solid fa-arrow-up-right-dots mr-2"></i>Progression</h3>
+                    <ul class="text-sm text-gray-300 space-y-2 list-disc pl-4">
+                        <li><strong>Reps:</strong> Top reps all sets clean → add weight.</li>
+                        <li>Not top reps → +1 total rep.</li>
+                        <li><strong>Holds:</strong> +5s total/week until target → harder level.</li>
+                        <li><strong>Bands/assist:</strong> reduce 1 step only after top reps clean.</li>
+                    </ul>
+                </section>
+
+                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
+                    <h3 class="text-lg font-bold text-white mb-3"><i class="fa-solid fa-layer-group mr-2 text-neon"></i>Skill Levels</h3>
+                    <div class="space-y-4">
+                        <div class="border-l-2 border-gray-600 pl-3">
+                            <span class="text-xs font-bold bg-gray-700 text-white px-2 py-1 rounded">L0</span>
+                            <p class="text-xs text-gray-400 mt-1">Active hang, scap pull-up, inv. row, band pull-up, wall plank, feet-assist support, tuck sit, box pistol.</p>
+                            <p class="text-xs text-neon mt-1">Advance: 30s hang + 3×8 rows + 3×6 band pull-ups + 20s wall plank.</p>
+                        </div>
+                        <div class="border-l-2 border-neon pl-3">
+                            <span class="text-xs font-bold bg-neon text-white px-2 py-1 rounded">L1</span>
+                            <p class="text-xs text-gray-400 mt-1">Strict singles/band vol, wall handstand, assist dip, tuck L-sit, tuck lever row, box pistol.</p>
+                            <p class="text-xs text-neon mt-1">Advance: 3×3 pull-ups + 3×6 assist dips + 3×20s wall handstand.</p>
+                        </div>
+                        <div class="border-l-2 border-power pl-3">
+                            <span class="text-xs font-bold bg-power text-black px-2 py-1 rounded">L2</span>
+                            <p class="text-xs text-gray-400 mt-1">Chest-to-bar prep, straight-bar dip, transition drill, toe pulls, one-leg L-sit, tuck front lever.</p>
+                            <p class="text-xs text-power mt-1">Advance: 8–10 pull-ups + 8–10 dips + 4×15s tuck L-sit + 3×12s tuck lever.</p>
+                        </div>
+                        <div class="border-l-2 border-purple-500 pl-3">
+                            <span class="text-xs font-bold bg-purple-500 text-white px-2 py-1 rounded">L3</span>
+                            <p class="text-xs text-gray-400 mt-1">Banded muscle-up, exp. high pull, wall HSPU negative, adv tuck front lever, full L-sit.</p>
+                            <p class="text-xs text-purple-400 mt-1">Advance: clean muscle-up + 20s L-sit + stable wall HSPU ecc.</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        `;
+        document.getElementById('main-content').innerHTML = html;
+    }
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active', 'text-white', 'border-b-2', 'border-neon');
+            if (btn.dataset.tab === tabId) {
+                btn.classList.add('active', 'text-white', 'border-b-2', 'border-neon');
+            }
+        });
+
+        if (tabId === 'info') renderInfo();
+        else renderWorkout(tabId);
+    }
+
+    // Event Delegation for Checkboxes and Inputs (Safe for all environments)
+    document.getElementById('main-content').addEventListener('change', (e) => {
+        if (e.target.classList.contains('ex-checkbox')) {
+            const id = e.target.dataset.id;
+            const isChecked = e.target.checked;
+            
+            doneToday[id] = isChecked;
+            saveData();
+            
+            const card = document.getElementById(`card-${id}`);
+            if (isChecked) card.classList.add('completed');
+            else card.classList.remove('completed');
+        }
+    });
+
+    document.getElementById('main-content').addEventListener('input', (e) => {
+        if (e.target.classList.contains('weight-input')) {
+            const id = e.target.dataset.id;
+            if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
+            userLogs[id].weight = e.target.value;
+            saveData();
+        }
+        if (e.target.classList.contains('reps-input')) {
+            const id = e.target.dataset.id;
+            if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
+            userLogs[id].reps = e.target.value;
+            saveData();
+        }
+    });
+
+    document.getElementById('tabs-container').addEventListener('click', (e) => {
+        const btn = e.target.closest('.tab-btn');
+        if (btn) {
+            switchTab(btn.dataset.tab);
+        }
+    });
+
+    checkDailyReset();
+    
+    // Auto-select tab based on day
+    const todayIndex = new Date().getDay(); 
+    if (todayIndex === 2) switchTab('tue');
+    else if (todayIndex === 4) switchTab('thu');
+    else if (todayIndex === 5) switchTab('fri');
+    else switchTab('tue'); // Fallback
+
+</script>
+</body>
+</html>
