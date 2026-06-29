@@ -57,6 +57,29 @@
             font-size: 0.85rem; outline: none; transition: border-color 0.2s;
         }
         .track-input:focus { border-color: #3b82f6; }
+        .quality-select { width: 116px; text-align: left; }
+        .next-action {
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            color: #d1fae5;
+            border-radius: 8px;
+            line-height: 1.35;
+        }
+        .next-action[data-tone="warn"] {
+            background: rgba(251, 191, 36, 0.09);
+            border-color: rgba(251, 191, 36, 0.28);
+            color: #fde68a;
+        }
+        .next-action[data-tone="danger"] {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.32);
+            color: #fecaca;
+        }
+        .next-action[data-tone="idle"] {
+            background: rgba(55, 65, 81, 0.6);
+            border-color: #4b5563;
+            color: #d1d5db;
+        }
         
         .tab-btn { transition: all 0.3s; }
         .tab-btn.active { color: white; border-bottom: 2px solid #3b82f6; }
@@ -185,6 +208,97 @@
         safeSet(STORAGE_KEY_DONE, doneToday);
     }
 
+    function parsePerformanceValues(raw) {
+        return String(raw || '').match(/\d+(?:\.\d+)?/g)?.map(Number) || [];
+    }
+
+    function findExerciseById(id) {
+        for (const day of Object.values(planData)) {
+            const exercise = day.exercises.find((ex) => ex.id === id);
+            if (exercise) return exercise;
+        }
+        return null;
+    }
+
+    function getTopTarget(ex) {
+        const ranges = [...ex.sets.matchAll(/(\d+)\s*[–-]\s*(\d+)/g)].map((match) => Number(match[2]));
+        if (ranges.length) return Math.max(...ranges);
+        const single = ex.sets.match(/×\s*(\d+)/);
+        return single ? Number(single[1]) : null;
+    }
+
+    function getProgressionTarget(ex) {
+        const rule = ex.rule.toLowerCase();
+        if (rule.includes('less band')) return 'reduce band 1 step or pull higher';
+        if (rule.includes('less assist')) return 'reduce assistance 1 step';
+        const match = ex.rule.match(/top\s*→\s*(.+)$/i);
+        return match ? match[1].trim() : 'add weight';
+    }
+
+    function isHoldExercise(ex) {
+        return ex.sets.includes('s') || ex.rule.includes('+5s') || /handstand|l-sit|front lever/i.test(ex.name);
+    }
+
+    function getImmediateRuleAction(ex, log = {}) {
+        const values = parsePerformanceValues(log.reps);
+        const quality = log.quality || '';
+        const topTarget = getTopTarget(ex);
+        const hitTop = Boolean(topTarget && values.length && values.every((value) => value >= topTarget));
+        const progression = getProgressionTarget(ex);
+
+        if (quality === 'pain') {
+            return { tone: 'danger', message: 'Pain/ugly reps: stop or regress. Use same weight or -5% next time.' };
+        }
+
+        if (quality === 'speed-drop') {
+            return { tone: 'warn', message: 'Speed dropped: stop the power work now. Keep it fast next time.' };
+        }
+
+        if (!values.length && !quality) {
+            return { tone: 'idle', message: 'Log reps/sec and quality to apply the rule immediately.' };
+        }
+
+        if (ex.order === 'P') {
+            if (hitTop && progression.includes('band')) {
+                return { tone: 'success', message: `Top clean: ${progression} next time.` };
+            }
+            if (quality === 'clean') {
+                return { tone: 'success', message: 'Fast today: repeat until 2 fast weeks, then go harder/+small load.' };
+            }
+            return { tone: 'idle', message: 'Power first: keep every rep fast at 30-70% 1RM.' };
+        }
+
+        if (quality === 'not-top') {
+            return {
+                tone: 'warn',
+                message: isHoldExercise(ex) ? 'Not at target: add +5s total next week.' : 'Not top: add +1 total clean rep next time.'
+            };
+        }
+
+        if (hitTop) {
+            if (isHoldExercise(ex)) return { tone: 'success', message: 'Target reached: move to a harder level next time.' };
+            return { tone: 'success', message: `Top clean: add ${progression} next time.` };
+        }
+
+        if (values.length) {
+            return {
+                tone: 'warn',
+                message: isHoldExercise(ex) ? 'Not at target: add +5s total next week.' : 'Not top: add +1 total clean rep next time.'
+            };
+        }
+
+        return { tone: 'idle', message: 'Choose quality to apply the progression rule.' };
+    }
+
+    function updateNextAction(id) {
+        const ex = findExerciseById(id);
+        const actionEl = document.querySelector(`[data-next-action="${id}"]`);
+        if (!ex || !actionEl) return;
+        const action = getImmediateRuleAction(ex, userLogs[id] || {});
+        actionEl.textContent = action.message;
+        actionEl.dataset.tone = action.tone;
+    }
+
     function renderWorkout(dayId) {
         const data = planData[dayId];
         let html = `<div class="mb-6 flex justify-between items-center">
@@ -204,6 +318,8 @@
             const isDone = doneToday[ex.id] || false;
             const logW = userLogs[ex.id]?.weight || '';
             const logR = userLogs[ex.id]?.reps || '';
+            const logQ = userLogs[ex.id]?.quality || '';
+            const action = getImmediateRuleAction(ex, userLogs[ex.id] || {});
 
             let badgeColor = 'bg-neon text-white'; // default
             if (isPower) badgeColor = 'bg-power text-black';
@@ -232,10 +348,20 @@
                     </div>
                     
                     ${ex.order !== 'W' ? `
-                    <div class="mt-4 pt-3 border-t border-gray-800 flex justify-end gap-2">
+                    <div class="mt-4 pt-3 border-t border-gray-800 flex flex-wrap justify-end gap-2">
                         <input type="text" placeholder="kg/lbs" class="track-input weight-input" data-id="${ex.id}" value="${logW}">
                         <input type="text" placeholder="reps/sec" class="track-input reps-input" data-id="${ex.id}" value="${logR}">
+                        <select class="track-input quality-select" data-id="${ex.id}">
+                            <option value="" ${logQ === '' ? 'selected' : ''}>quality</option>
+                            <option value="clean" ${logQ === 'clean' ? 'selected' : ''}>clean / fast</option>
+                            <option value="not-top" ${logQ === 'not-top' ? 'selected' : ''}>not top</option>
+                            <option value="speed-drop" ${logQ === 'speed-drop' ? 'selected' : ''}>speed drop</option>
+                            <option value="pain" ${logQ === 'pain' ? 'selected' : ''}>pain / ugly</option>
+                        </select>
                     </div>` : ''}
+                    <div class="next-action mt-3 p-3 text-xs font-semibold" data-next-action="${ex.id}" data-tone="${action.tone}">
+                        ${action.message}
+                    </div>
                 </div>
             `;
         });
@@ -332,12 +458,24 @@
             if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
             userLogs[id].weight = e.target.value;
             saveData();
+            updateNextAction(id);
         }
         if (e.target.classList.contains('reps-input')) {
             const id = e.target.dataset.id;
             if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
             userLogs[id].reps = e.target.value;
             saveData();
+            updateNextAction(id);
+        }
+    });
+
+    document.getElementById('main-content').addEventListener('change', (e) => {
+        if (e.target.classList.contains('quality-select')) {
+            const id = e.target.dataset.id;
+            if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
+            userLogs[id].quality = e.target.value;
+            saveData();
+            updateNextAction(id);
         }
     });
 
