@@ -116,6 +116,7 @@
             <button class="tab-btn active pb-2 flex-1 text-center" data-tab="tue">TUE</button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="thu">THU</button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="fri">FRI</button>
+            <button class="tab-btn pb-2 flex-1 text-center" data-tab="inputs"><i class="fa-solid fa-table-list pointer-events-none"></i></button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="week"><i class="fa-solid fa-calendar-week pointer-events-none"></i></button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="rules"><i class="fa-solid fa-sliders pointer-events-none"></i></button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="info"><i class="fa-solid fa-circle-info pointer-events-none"></i></button>
@@ -244,11 +245,13 @@
     const STORAGE_KEY_DONE = 'hybrid_plan_done_v2';
     const STORAGE_KEY_TARGETS = 'hybrid_plan_targets_v1';
     const STORAGE_KEY_RULES = 'hybrid_plan_rules_v1';
+    const STORAGE_KEY_EXERCISE_INPUTS = 'hybrid_plan_exercise_inputs_v1';
 
     let userLogs = {};
     let doneToday = {};
     let planTargets = {};
     let progressionRules = {};
+    let exerciseInputs = {};
 
     function safeGet(key) {
         try {
@@ -330,6 +333,7 @@
         doneToday = state.done;
         planTargets = safeGet(STORAGE_KEY_TARGETS) || {};
         progressionRules = loadRules();
+        exerciseInputs = safeGet(STORAGE_KEY_EXERCISE_INPUTS) || {};
 
         if (state.changed) {
             safeSet(STORAGE_KEY_LOGS, userLogs);
@@ -342,6 +346,7 @@
         safeSet(STORAGE_KEY_LOGS, userLogs);
         safeSet(STORAGE_KEY_DONE, doneToday);
         safeSet(STORAGE_KEY_TARGETS, planTargets);
+        safeSet(STORAGE_KEY_EXERCISE_INPUTS, exerciseInputs);
     }
 
     function parsePerformanceValues(raw) {
@@ -472,11 +477,20 @@
     }
 
     function estimateOneRepMax(log = {}, rules = progressionRules) {
-        const weight = parsePerformanceValues(log.weight)[0];
-        const reps = parsePerformanceValues(log.reps)[0];
+        const weight = parsePerformanceValues(log.currentLoad ?? log.weight)[0];
+        const reps = parsePerformanceValues(log.currentReps ?? log.reps)[0];
         const rir = parsePerformanceValues(log.rir)[0] ?? Number(rules?.defaultRir ?? getDefaultRules().defaultRir);
         if (!weight || !reps) return null;
         return Number((weight * (1 + ((reps + rir) / 30))).toFixed(2));
+    }
+
+    function hasExerciseInput(input = {}) {
+        return ['directE1RM', 'currentLoad', 'currentReps', 'rir', 'skillLevel'].some((key) => String(input[key] ?? '').trim() !== '');
+    }
+
+    function getPlannerInput(id) {
+        const input = exerciseInputs[id] || {};
+        return hasExerciseInput(input) ? input : getDisplayLog(id);
     }
 
     function getAnchor1RM(meta = {}, rules = progressionRules) {
@@ -520,16 +534,17 @@
             return { type: 'Skill', phase: getWeekPhase(week), deload, sets: adjustedSets, load: '', percent: 0, e1rm: '', source: 'skill' };
         }
 
-        const loggedE1RM = estimateOneRepMax(log, activeRules);
-        const anchor = loggedE1RM || getAnchor1RM(meta, activeRules) * Number(meta.transfer || 0);
-        const source = loggedE1RM ? 'logged e1RM' : `${meta.basis || 'anchor'} anchor`;
+        const directE1RM = parsePerformanceValues(log.directE1RM)[0];
+        const exerciseE1RM = directE1RM || estimateOneRepMax(log, activeRules);
+        const anchor = exerciseE1RM || getAnchor1RM(meta, activeRules) * Number(meta.transfer || 0);
+        const source = directE1RM ? 'direct e1RM' : (exerciseE1RM ? 'exercise e1RM' : `${meta.basis || 'anchor'} anchor`);
         const buildWeeks = getEffectiveBuildWeeks(week, activeRules);
         const rawPercent = Number(meta.startPct || 0) + buildWeeks * getWeeklyPctStep(meta, activeRules);
         const cappedPercent = Math.min(rawPercent, Number(meta.capPct || rawPercent));
         const effectivePercent = deload ? cappedPercent * Number(activeRules.deloadLoadFactor) : cappedPercent;
         let planned = anchor * effectivePercent;
 
-        if (meta.basis === 'pullupTotal' && !loggedE1RM) {
+        if (meta.basis === 'pullupTotal' && !exerciseE1RM) {
             planned = Math.max(0, planned - Number(activeRules.bodyweightKg));
         }
 
@@ -541,12 +556,12 @@
             sets: adjustedSets,
             percent: Number(effectivePercent.toFixed(2)),
             load: rounded ? formatNumber(rounded) : '',
-            e1rm: loggedE1RM ? formatNumber(loggedE1RM) : '',
+            e1rm: exerciseE1RM ? formatNumber(exerciseE1RM) : '',
             source
         };
     }
 
-    function getProjectedSkillPlan(skillKey, week = getCurrentWeek(), rules = progressionRules) {
+    function getProjectedSkillPlan(skillKey, week = getCurrentWeek(), rules = progressionRules, input = {}) {
         const activeRules = { ...getDefaultRules(), ...(rules || {}) };
         const levelKeys = {
             handstand: 'handstandLevel',
@@ -556,7 +571,8 @@
             frontLever: 'frontLeverLevel',
             lSit: 'lSitLevel'
         };
-        const startLevel = Number(activeRules[levelKeys[skillKey]] ?? 0);
+        const inputLevel = parsePerformanceValues(input.skillLevel)[0];
+        const startLevel = Number(inputLevel ?? activeRules[levelKeys[skillKey]] ?? 0);
         const window = Number(activeRules.skillWeeksPerLevel) || 4;
         const level = clamp(startLevel + Math.floor((Number(week) - 1) / window), 0, 3);
         return {
@@ -564,6 +580,21 @@
             level,
             drill: skillDrills[skillKey]?.[level] || 'Quality skill practice'
         };
+    }
+
+    function getBaselinePlanTarget(ex, week = getCurrentWeek(), rules = progressionRules, input = {}) {
+        const meta = exercisePlannerMeta[ex.id] || {};
+        if (meta.type === 'Skill') {
+            const skillPlan = getProjectedSkillPlan(meta.skill, week, rules, input);
+            return { skill: skillPlan.drill };
+        }
+
+        const projection = getProjectedLoadPlan(ex, week, rules, input);
+        const bounds = getRepBounds(ex);
+        const target = {};
+        if (projection.load) target.weight = projection.load;
+        if (bounds.minTotal) target.reps = String(bounds.minTotal);
+        return target;
     }
 
     function getNextLoadTarget(ex, log = {}, rules = progressionRules) {
@@ -756,7 +787,7 @@
         const metricsEl = document.querySelector(`[data-planner-metrics="${id}"]`);
         if (metricsEl) {
             const weekNumber = getCurrentWeek(progressionRules);
-            const projected = getProjectedLoadPlan(ex, weekNumber, progressionRules, getDisplayLog(id));
+            const projected = getProjectedLoadPlan(ex, weekNumber, progressionRules, getPlannerInput(id));
             metricsEl.textContent = `Week ${weekNumber} • ${projected.phase}${projected.deload ? ' • Deload' : ' • Build'} • ${projected.type}${projected.percent ? ` • ${Math.round(projected.percent * 100)}% 1RM` : ''}${projected.load ? ` • planned ${projected.load}kg` : ''}${projected.e1rm ? ` • e1RM ${projected.e1rm}kg` : ''}`;
         }
     }
@@ -785,7 +816,7 @@
             const logQ = displayLog.quality || '';
             const planned = targetSummary(planTargets[ex.id]);
             const weekNumber = getCurrentWeek(progressionRules);
-            const projected = getProjectedLoadPlan(ex, weekNumber, progressionRules, displayLog);
+            const projected = getProjectedLoadPlan(ex, weekNumber, progressionRules, getPlannerInput(ex.id));
             const action = getImmediateRuleAction(ex, displayLog);
 
             let badgeColor = 'bg-neon text-white'; // default
@@ -932,7 +963,7 @@
                     </div>
                     <div class="space-y-2">
                         ${exercises.map((ex) => {
-                            const projection = getProjectedLoadPlan(ex, selectedWeek, rules, getDisplayLog(ex.id));
+                            const projection = getProjectedLoadPlan(ex, selectedWeek, rules, getPlannerInput(ex.id));
                             return `
                                 <div class="rounded-lg bg-gray-800 p-3 text-xs">
                                     <div class="flex items-start justify-between gap-3">
@@ -957,7 +988,8 @@
                     <h3 class="text-lg font-bold text-white mb-3"><i class="fa-solid fa-layer-group mr-2 text-neon"></i>Skill Progress</h3>
                     <div class="space-y-2">
                         ${skillRows.map(([key, label]) => {
-                            const plan = getProjectedSkillPlan(key, selectedWeek, rules);
+                            const skillExercise = exercises.find((ex) => exercisePlannerMeta[ex.id]?.skill === key);
+                            const plan = getProjectedSkillPlan(key, selectedWeek, rules, skillExercise ? getPlannerInput(skillExercise.id) : {});
                             return `
                                 <div class="rounded-lg bg-gray-800 p-3 text-xs">
                                     <div class="flex items-center justify-between gap-3">
@@ -965,6 +997,67 @@
                                         <span class="font-extrabold text-power">L${plan.level}</span>
                                     </div>
                                     <div class="mt-1 text-gray-300">${plan.drill}</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </section>
+            </div>
+        `;
+        document.getElementById('main-content').innerHTML = html;
+    }
+
+    function applyExerciseBaseline(id) {
+        const ex = findExerciseById(id);
+        if (!ex) return;
+        const weekNumber = getCurrentWeek(progressionRules);
+        const input = exerciseInputs[id] || {};
+        const target = getBaselinePlanTarget(ex, weekNumber, progressionRules, input);
+        if (target && Object.keys(target).length) planTargets[id] = target;
+        delete userLogs[id];
+        doneToday[id] = false;
+        saveData();
+    }
+
+    function renderInputs() {
+        const weekNumber = getCurrentWeek(progressionRules);
+        const exercises = getAllExercisesWithDay().filter((ex) => ex.order !== 'W');
+        const html = `
+            <div class="space-y-4 pb-6">
+                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
+                    <h2 class="text-xl font-bold text-white mb-1"><i class="fa-solid fa-table-list mr-2 text-neon"></i>Exercise Inputs</h2>
+                    <p class="mb-4 text-xs text-gray-400">Edit a baseline row to recalculate that exercise from week ${weekNumber} and restart its target tracking.</p>
+                    <div class="space-y-3">
+                        ${exercises.map((ex) => {
+                            const input = exerciseInputs[ex.id] || {};
+                            const meta = exercisePlannerMeta[ex.id] || {};
+                            const projection = getProjectedLoadPlan(ex, weekNumber, progressionRules, input);
+                            const target = getBaselinePlanTarget(ex, weekNumber, progressionRules, input);
+                            const isSkill = meta.type === 'Skill';
+                            return `
+                                <div class="rounded-lg bg-gray-800 p-3 text-xs">
+                                    <div class="mb-2 flex items-start justify-between gap-3">
+                                        <div>
+                                            <div class="font-bold text-gray-100">${ex.dayTitle.replace(' â€” ', ' ')} • ${ex.order} ${ex.name}</div>
+                                            <div class="text-gray-400">${projection.type} • ${projection.source}</div>
+                                        </div>
+                                        <div class="text-right font-extrabold text-power">${targetSummary(target) || projection.type}</div>
+                                    </div>
+                                    ${isSkill ? `
+                                        <div class="flex flex-wrap justify-end gap-2">
+                                            <input type="number" min="0" max="3" step="1" placeholder="Level" class="track-input planner-input" data-id="${ex.id}" data-field="skillLevel" value="${input.skillLevel || ''}">
+                                        </div>
+                                    ` : `
+                                        <div class="flex flex-wrap justify-end gap-2">
+                                            <input type="text" placeholder="load" class="track-input planner-input" data-id="${ex.id}" data-field="currentLoad" value="${input.currentLoad || ''}">
+                                            <input type="text" placeholder="reps" class="track-input planner-input" data-id="${ex.id}" data-field="currentReps" value="${input.currentReps || ''}">
+                                            <input type="text" placeholder="RIR" class="track-input planner-input" data-id="${ex.id}" data-field="rir" value="${input.rir || ''}">
+                                            <input type="text" placeholder="e1RM" class="track-input planner-input" data-id="${ex.id}" data-field="directE1RM" value="${input.directE1RM || ''}">
+                                        </div>
+                                    `}
+                                    <div class="mt-2 text-gray-300">
+                                        ${projection.percent ? `${Math.round(projection.percent * 100)}% 1RM • ` : ''}${projection.load ? `planned ${projection.load}kg • ` : ''}${projection.e1rm ? `e1RM ${projection.e1rm}kg • ` : ''}${projection.phase}${projection.deload ? ' • deload' : ' • build'}
+                                    </div>
                                 </div>
                             `;
                         }).join('')}
@@ -1083,6 +1176,7 @@
         });
 
         if (tabId === 'info') renderInfo();
+        else if (tabId === 'inputs') renderInputs();
         else if (tabId === 'week') renderWeekView();
         else if (tabId === 'rules') renderRules();
         else renderWorkout(tabId);
@@ -1104,6 +1198,16 @@
     });
 
     document.getElementById('main-content').addEventListener('input', (e) => {
+        if (e.target.classList.contains('planner-input')) {
+            const id = e.target.dataset.id;
+            const field = e.target.dataset.field;
+            if (!exerciseInputs[id]) exerciseInputs[id] = {};
+            exerciseInputs[id][field] = e.target.value;
+            if (field === 'skillLevel' && e.target.value !== '') {
+                exerciseInputs[id][field] = String(clamp(Number(e.target.value), 0, 3));
+            }
+            applyExerciseBaseline(id);
+        }
         if (e.target.classList.contains('weight-input')) {
             const id = e.target.dataset.id;
             if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
@@ -1152,6 +1256,16 @@
             saveRules();
             saveData();
             renderRules();
+        }
+        if (e.target.classList.contains('planner-input')) {
+            const id = e.target.dataset.id;
+            const field = e.target.dataset.field;
+            if (!exerciseInputs[id]) exerciseInputs[id] = {};
+            exerciseInputs[id][field] = e.target.value;
+            if (field === 'skillLevel' && e.target.value !== '') {
+                exerciseInputs[id][field] = String(clamp(Number(e.target.value), 0, 3));
+            }
+            applyExerciseBaseline(id);
         }
         if (e.target.classList.contains('week-input')) {
             const maxWeek = Number(progressionRules.planWeeks || getDefaultRules().planWeeks);

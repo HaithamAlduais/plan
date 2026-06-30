@@ -40,6 +40,8 @@ globalThis.__trainingRules = {
   estimateOneRepMax,
   getProjectedLoadPlan,
   getProjectedSkillPlan,
+  getBaselinePlanTarget,
+  hasExerciseInput,
 };`, context);
 
 const {
@@ -54,6 +56,8 @@ const {
   estimateOneRepMax,
   getProjectedLoadPlan,
   getProjectedSkillPlan,
+  getBaselinePlanTarget,
+  hasExerciseInput,
 } = context.__trainingRules;
 
 assert.equal(JSON.stringify(parsePerformanceValues('8, 8, 8')), JSON.stringify([8, 8, 8]));
@@ -117,15 +121,41 @@ const e1rmPlan = getProjectedLoadPlan(
   planData.tue.exercises[1],
   1,
   { ...getDefaultRules(), squatAnchor1RM: 140 },
-  { weight: '100', reps: '8', rir: '2' }
+  { currentLoad: '100', currentReps: '8', rir: '2' }
 );
 assert.equal(e1rmPlan.e1rm, '133.33');
-assert.equal(e1rmPlan.source, 'logged e1RM');
+assert.equal(e1rmPlan.source, 'exercise e1RM');
+
+const directE1rmPlan = getProjectedLoadPlan(
+  planData.tue.exercises[1],
+  1,
+  { ...getDefaultRules(), squatAnchor1RM: 140 },
+  { directE1RM: '160', currentLoad: '100', currentReps: '8', rir: '2' }
+);
+assert.equal(directE1rmPlan.e1rm, '160');
+assert.equal(directE1rmPlan.source, 'direct e1RM');
+assert.equal(directE1rmPlan.load, '130');
+
+const baselineTarget = getBaselinePlanTarget(
+  planData.tue.exercises[1],
+  1,
+  { ...getDefaultRules(), squatAnchor1RM: 140 },
+  { currentLoad: '100', currentReps: '8', rir: '2' }
+);
+assert.equal(baselineTarget.weight, '105');
+assert.equal(baselineTarget.reps, '15');
 
 const skillPlan = getProjectedSkillPlan('handstand', 5, { ...getDefaultRules(), handstandLevel: 1, skillWeeksPerLevel: 4 });
 assert.equal(skillPlan.phase, 'Strength-skill bridge');
 assert.equal(skillPlan.level, 2);
 assert.equal(skillPlan.drill, 'Wall HSPU eccentric 4x2-4 + freestanding kick-up practice');
+
+const overriddenSkillPlan = getProjectedSkillPlan('handstand', 1, { ...getDefaultRules(), handstandLevel: 1 }, { skillLevel: '3' });
+assert.equal(overriddenSkillPlan.level, 3);
+assert.equal(overriddenSkillPlan.drill, 'Deficit/wall HSPU or freestanding HSPU quality sets');
+
+assert.equal(hasExerciseInput({ currentLoad: '100' }), true);
+assert.equal(hasExerciseInput({ currentLoad: '', currentReps: '', rir: '' }), false);
 
 assert.equal(
   getImmediateRuleAction(planData.thu.exercises[0], { reps: 'fast', quality: 'speed-drop' }).message,
@@ -156,3 +186,5 @@ assert.ok(html.includes('rule-input'), 'Rules should be editable from the rules 
 assert.ok(html.includes('data-tab="week"'), 'The tracker should include an Excel-style weekly plan view');
 assert.ok(html.includes('getProjectedLoadPlan'), 'The tracker should project %1RM loads from anchors and e1RM');
 assert.ok(html.includes('rir-input'), 'Cards should capture RIR for e1RM calculations');
+assert.ok(html.includes('data-tab="inputs"'), 'The tracker should include an Excel-style per-exercise Inputs page');
+assert.ok(html.includes('planner-input'), 'Exercise baselines should be editable like the Excel Inputs sheet');
