@@ -35,6 +35,11 @@ globalThis.__trainingRules = {
   getDefaultRules,
   getNextPlanTarget,
   prepareNewDayState,
+  getWeekPhase,
+  isDeloadWeek,
+  estimateOneRepMax,
+  getProjectedLoadPlan,
+  getProjectedSkillPlan,
 };`, context);
 
 const {
@@ -44,6 +49,11 @@ const {
   getDefaultRules,
   getNextPlanTarget,
   prepareNewDayState,
+  getWeekPhase,
+  isDeloadWeek,
+  estimateOneRepMax,
+  getProjectedLoadPlan,
+  getProjectedSkillPlan,
 } = context.__trainingRules;
 
 assert.equal(JSON.stringify(parsePerformanceValues('8, 8, 8')), JSON.stringify([8, 8, 8]));
@@ -87,6 +97,36 @@ assert.equal(
   JSON.stringify({ logs: {}, done: {}, changed: true })
 );
 
+assert.equal(getWeekPhase(1), 'Foundation');
+assert.equal(getWeekPhase(6), 'Strength-skill bridge');
+assert.equal(isDeloadWeek(4, { ...getDefaultRules(), deloadEveryWeeks: 4 }), true);
+assert.equal(isDeloadWeek(5, { ...getDefaultRules(), deloadEveryWeeks: 4 }), false);
+assert.equal(estimateOneRepMax({ weight: '100', reps: '8', rir: '2' }), 133.33);
+
+const deloadPlan = getProjectedLoadPlan(
+  planData.tue.exercises[1],
+  4,
+  { ...getDefaultRules(), squatAnchor1RM: 140, lowerIncrementKg: 5, deloadEveryWeeks: 4, deloadLoadFactor: 0.9, deloadSetFactor: 0.6 }
+);
+assert.equal(deloadPlan.deload, true);
+assert.equal(deloadPlan.sets, 2);
+assert.equal(deloadPlan.percent, 0.79);
+assert.equal(deloadPlan.load, '110');
+
+const e1rmPlan = getProjectedLoadPlan(
+  planData.tue.exercises[1],
+  1,
+  { ...getDefaultRules(), squatAnchor1RM: 140 },
+  { weight: '100', reps: '8', rir: '2' }
+);
+assert.equal(e1rmPlan.e1rm, '133.33');
+assert.equal(e1rmPlan.source, 'logged e1RM');
+
+const skillPlan = getProjectedSkillPlan('handstand', 5, { ...getDefaultRules(), handstandLevel: 1, skillWeeksPerLevel: 4 });
+assert.equal(skillPlan.phase, 'Strength-skill bridge');
+assert.equal(skillPlan.level, 2);
+assert.equal(skillPlan.drill, 'Wall HSPU eccentric 4x2-4 + freestanding kick-up practice');
+
 assert.equal(
   getImmediateRuleAction(planData.thu.exercises[0], { reps: 'fast', quality: 'speed-drop' }).message,
   'Speed dropped: stop the power work now. Keep it fast next time.'
@@ -113,3 +153,6 @@ assert.ok(html.includes('getNextPlanTarget'), 'Weighted work should calculate ne
 assert.ok(html.includes('getSkillProgressionTarget'), 'Calisthenics work should advance to the next skill target');
 assert.ok(html.includes('data-tab="rules"'), 'The tracker should include an editable rules page');
 assert.ok(html.includes('rule-input'), 'Rules should be editable from the rules page');
+assert.ok(html.includes('data-tab="week"'), 'The tracker should include an Excel-style weekly plan view');
+assert.ok(html.includes('getProjectedLoadPlan'), 'The tracker should project %1RM loads from anchors and e1RM');
+assert.ok(html.includes('rir-input'), 'Cards should capture RIR for e1RM calculations');
