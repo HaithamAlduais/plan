@@ -43,6 +43,8 @@ globalThis.__trainingRules = {
   getBaselinePlanTarget,
   hasExerciseInput,
   mapWorkoutLogToExerciseInput,
+  getRestSeconds,
+  formatTimerTime,
 };`, context);
 
 const {
@@ -60,6 +62,8 @@ const {
   getBaselinePlanTarget,
   hasExerciseInput,
   mapWorkoutLogToExerciseInput,
+  getRestSeconds,
+  formatTimerTime,
 } = context.__trainingRules;
 
 assert.equal(JSON.stringify(parsePerformanceValues('8, 8, 8')), JSON.stringify([8, 8, 8]));
@@ -189,6 +193,14 @@ assert.equal(
   'Pain/ugly reps: stop or regress. Use same weight or -5% next time.'
 );
 
+assert.equal(getRestSeconds(planData.sun.exercises[0]), 90, 'Power rest should use the middle of 60-120s');
+assert.equal(getRestSeconds(planData.sun.exercises[1]), 120, 'Superset/pair work should rest 2 minutes');
+assert.equal(getRestSeconds(planData.sun.exercises[6]), 75, 'Accessory work should rest 60-75s');
+assert.equal(getRestSeconds(planData.thu.exercises[2]), 60, 'Skill work should use a short quality rest');
+assert.equal(getRestSeconds(planData.thu.exercises[0]), 0, 'Prep work should not render a timer');
+assert.equal(formatTimerTime(90), '1:30');
+assert.equal(formatTimerTime(75), '1:15');
+
 const simpleTabs = [...html.matchAll(/data-tab="([^"]+)"/g)].map((match) => match[1]);
 assert.deepEqual(simpleTabs, ['sun', 'tue', 'thu'], 'The app should show only the 3 training day panels');
 assert.equal(html.includes('rir-input'), false, 'RIR should be automated, not entered manually');
@@ -225,6 +237,8 @@ assert.equal(
 );
 
 assert.ok(html.includes('next-action'), 'Cards should render an immediate next-action result');
+assert.ok(html.includes('timer-button'), 'Cards should render a rest timer button');
+assert.ok(html.includes('data-timer-id'), 'Timer controls should target each exercise');
 assert.ok(html.includes('quality-select'), 'Cards should let the user mark quality immediately');
 assert.ok(html.includes('getNextPlanTarget'), 'Weighted work should calculate next target weight and reps');
 assert.ok(html.includes('getSkillProgressionTarget'), 'Calisthenics work should advance to the next skill target');

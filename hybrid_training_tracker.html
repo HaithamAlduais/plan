@@ -92,6 +92,22 @@
             border-color: #4b5563;
             color: #d1d5db;
         }
+        .timer-button {
+            background: rgba(251, 191, 36, 0.12);
+            border: 1px solid rgba(251, 191, 36, 0.35);
+            color: #fde68a;
+            border-radius: 8px;
+            min-height: 36px;
+            padding: 0 10px;
+            font-size: 0.8rem;
+            font-weight: 800;
+        }
+        .timer-display {
+            color: #f9fafb;
+            min-width: 48px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
         
         .tab-btn { transition: all 0.3s; }
         .tab-btn.active { color: white; border-bottom: 2px solid #3b82f6; }
@@ -243,6 +259,7 @@
     let planTargets = {};
     let progressionRules = {};
     let exerciseInputs = {};
+    let activeTimer = { id: null, remaining: 0, interval: null };
 
     function safeGet(key) {
         try {
@@ -403,6 +420,24 @@
         if (/leg|squat|rdl|split|calf|hip thrust|ham curl|pistol/i.test(label)) return 'lower';
         if (/curl|raise|pushdown|face pull|rear delt|hollow|dead bug|pallof/i.test(label)) return 'accessory';
         return 'upper';
+    }
+
+    function getRestSeconds(ex) {
+        if (!ex || ex.order === 'W') return 0;
+        if (ex.order === 'P') return 90;
+        if (/60\s*[–-]\s*75s/i.test(ex.rest)) return 75;
+        if (ex.order.includes('A') || ex.order.includes('B')) return 120;
+        const meta = exercisePlannerMeta[ex.id] || {};
+        if (meta.type === 'Skill') return 60;
+        if (getExerciseCategory(ex) === 'accessory') return 75;
+        return 120;
+    }
+
+    function formatTimerTime(seconds) {
+        const safeSeconds = Math.max(0, Number(seconds) || 0);
+        const mins = Math.floor(safeSeconds / 60);
+        const secs = safeSeconds % 60;
+        return `${mins}:${String(secs).padStart(2, '0')}`;
     }
 
     function getProgressionTarget(ex) {
@@ -772,6 +807,40 @@
         }
     }
 
+    function updateTimerUi(id, label = null) {
+        const ex = findExerciseById(id);
+        const display = document.querySelector(`[data-timer-display="${id}"]`);
+        const button = document.querySelector(`[data-timer-id="${id}"]`);
+        if (display) display.textContent = label || formatTimerTime(activeTimer.id === id ? activeTimer.remaining : getRestSeconds(ex));
+        if (button && ex) {
+            const restSeconds = getRestSeconds(ex);
+            const text = button.querySelector('span');
+            if (text) text.textContent = `${activeTimer.id === id && activeTimer.remaining > 0 ? 'Reset' : 'Start'} ${formatTimerTime(restSeconds)}`;
+        }
+    }
+
+    function startRestTimer(id) {
+        const ex = findExerciseById(id);
+        const restSeconds = getRestSeconds(ex);
+        if (!restSeconds) return;
+
+        const previousId = activeTimer.id;
+        if (activeTimer.interval) clearInterval(activeTimer.interval);
+        activeTimer = { id, remaining: restSeconds, interval: null };
+        if (previousId && previousId !== id) updateTimerUi(previousId);
+        updateTimerUi(id);
+
+        activeTimer.interval = setInterval(() => {
+            activeTimer.remaining = Math.max(0, activeTimer.remaining - 1);
+            updateTimerUi(id);
+            if (activeTimer.remaining <= 0) {
+                clearInterval(activeTimer.interval);
+                activeTimer.interval = null;
+                updateTimerUi(id, 'Done');
+            }
+        }, 1000);
+    }
+
     function updateNextAction(id) {
         const ex = findExerciseById(id);
         const actionEl = document.querySelector(`[data-next-action="${id}"]`);
@@ -820,6 +889,8 @@
             const weekNumber = getCurrentWeek(progressionRules);
             const projected = getProjectedLoadPlan(ex, weekNumber, progressionRules, getPlannerInput(ex.id));
             const action = getImmediateRuleAction(ex, displayLog);
+            const restSeconds = getRestSeconds(ex);
+            const timerRemaining = activeTimer.id === ex.id && activeTimer.remaining > 0 ? activeTimer.remaining : restSeconds;
 
             let badgeColor = 'bg-neon text-white'; // default
             if (isPower) badgeColor = 'bg-power text-black';
@@ -859,6 +930,14 @@
                             <option value="speed-drop" ${logQ === 'speed-drop' ? 'selected' : ''}>speed drop</option>
                             <option value="pain" ${logQ === 'pain' ? 'selected' : ''}>pain / ugly</option>
                         </select>
+                    </div>` : ''}
+                    ${restSeconds ? `
+                    <div class="mt-3 flex items-center justify-between gap-3 rounded-lg bg-gray-900/60 p-2">
+                        <button type="button" class="timer-button inline-flex items-center gap-2" data-timer-id="${ex.id}" data-rest-seconds="${restSeconds}">
+                            <i class="fa-solid fa-hourglass-half pointer-events-none"></i>
+                            <span class="pointer-events-none">${activeTimer.id === ex.id ? 'Reset' : 'Start'} ${formatTimerTime(restSeconds)}</span>
+                        </button>
+                        <span class="timer-display text-sm font-extrabold" data-timer-display="${ex.id}">${formatTimerTime(timerRemaining)}</span>
                     </div>` : ''}
                     ${ex.order !== 'W' ? `
                     <div class="planned-target mt-3 p-2 text-xs font-semibold" data-planned-target="${ex.id}">
@@ -903,6 +982,11 @@
             if (isChecked) card.classList.add('completed');
             else card.classList.remove('completed');
         }
+    });
+
+    document.getElementById('main-content').addEventListener('click', (e) => {
+        const timerButton = e.target.closest('.timer-button');
+        if (timerButton) startRestTimer(timerButton.dataset.timerId);
     });
 
     document.getElementById('main-content').addEventListener('input', (e) => {
