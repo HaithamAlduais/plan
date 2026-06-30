@@ -65,25 +65,25 @@ const {
 assert.equal(JSON.stringify(parsePerformanceValues('8, 8, 8')), JSON.stringify([8, 8, 8]));
 
 assert.equal(
-  getImmediateRuleAction(planData.tue.exercises[1], { weight: '100', reps: '8,8,8', quality: 'clean' }).message,
+  getImmediateRuleAction(planData.sun.exercises[1], { weight: '100', reps: '8,8,8', quality: 'clean' }).message,
   'Top clean: next target 105kg x 15 total reps.'
 );
 
 assert.equal(
-  getImmediateRuleAction(planData.tue.exercises[1], { weight: '100', reps: '8,7,6', quality: 'clean' }).message,
+  getImmediateRuleAction(planData.sun.exercises[1], { weight: '100', reps: '8,7,6', quality: 'clean' }).message,
   'Not top: next target 100kg x 22 total clean reps.'
 );
 
-const topCleanTarget = getNextPlanTarget(planData.tue.exercises[1], { weight: '100', reps: '8,8,8', quality: 'clean' });
+const topCleanTarget = getNextPlanTarget(planData.sun.exercises[1], { weight: '100', reps: '8,8,8', quality: 'clean' });
 assert.equal(topCleanTarget.weight, '105');
 assert.equal(topCleanTarget.reps, '15');
 
-const notTopTarget = getNextPlanTarget(planData.tue.exercises[1], { weight: '100', reps: '8,7,6', quality: 'clean' });
+const notTopTarget = getNextPlanTarget(planData.sun.exercises[1], { weight: '100', reps: '8,7,6', quality: 'clean' });
 assert.equal(notTopTarget.weight, '100');
 assert.equal(notTopTarget.reps, '22');
 
 const customIncrementTarget = getNextPlanTarget(
-  planData.tue.exercises[1],
+  planData.sun.exercises[1],
   { weight: '100', reps: '8,8,8', quality: 'clean' },
   { ...getDefaultRules(), lowerIncrementKg: 10 }
 );
@@ -91,7 +91,7 @@ assert.equal(customIncrementTarget.weight, '110');
 assert.equal(customIncrementTarget.reps, '15');
 
 const tweakedWeightTarget = getNextPlanTarget(
-  planData.tue.exercises[1],
+  planData.sun.exercises[1],
   { weight: '97.5', reps: '8,8,8', quality: 'clean' },
   { ...getDefaultRules(), lowerIncrementKg: 5 }
 );
@@ -110,7 +110,7 @@ assert.equal(isDeloadWeek(5, { ...getDefaultRules(), deloadEveryWeeks: 4 }), fal
 assert.equal(estimateOneRepMax({ weight: '100', reps: '8', rir: '2' }), 133.33);
 
 const deloadPlan = getProjectedLoadPlan(
-  planData.tue.exercises[1],
+  planData.sun.exercises[1],
   4,
   { ...getDefaultRules(), squatAnchor1RM: 140, lowerIncrementKg: 5, deloadEveryWeeks: 4, deloadLoadFactor: 0.9, deloadSetFactor: 0.6 }
 );
@@ -120,7 +120,7 @@ assert.equal(deloadPlan.percent, 0.79);
 assert.equal(deloadPlan.load, '110');
 
 const e1rmPlan = getProjectedLoadPlan(
-  planData.tue.exercises[1],
+  planData.sun.exercises[1],
   1,
   { ...getDefaultRules(), squatAnchor1RM: 140 },
   { currentLoad: '100', currentReps: '8', rir: '2' }
@@ -129,7 +129,7 @@ assert.equal(e1rmPlan.e1rm, '133.33');
 assert.equal(e1rmPlan.source, 'exercise e1RM');
 
 const directE1rmPlan = getProjectedLoadPlan(
-  planData.tue.exercises[1],
+  planData.sun.exercises[1],
   1,
   { ...getDefaultRules(), squatAnchor1RM: 140 },
   { directE1RM: '160', currentLoad: '100', currentReps: '8', rir: '2' }
@@ -139,7 +139,7 @@ assert.equal(directE1rmPlan.source, 'direct e1RM');
 assert.equal(directE1rmPlan.load, '130');
 
 const baselineTarget = getBaselinePlanTarget(
-  planData.tue.exercises[1],
+  planData.sun.exercises[1],
   1,
   { ...getDefaultRules(), squatAnchor1RM: 140 },
   { currentLoad: '100', currentReps: '8', rir: '2' }
@@ -168,22 +168,22 @@ assert.equal(
 );
 
 assert.equal(
-  getImmediateRuleAction(planData.thu.exercises[0], { reps: 'fast', quality: 'speed-drop' }).message,
+  getImmediateRuleAction(planData.tue.exercises[0], { reps: 'fast', quality: 'speed-drop' }).message,
   'Speed dropped: stop the power work now. Keep it fast next time.'
 );
 
 assert.equal(
-  getImmediateRuleAction(planData.fri.exercises[1], { reps: '4,4,4', quality: 'clean' }).message,
+  getImmediateRuleAction(planData.thu.exercises[1], { reps: '4,4,4', quality: 'clean' }).message,
   'Top clean: reduce band 1 step or pull higher next time.'
 );
 
 assert.equal(
-  getImmediateRuleAction(planData.fri.exercises[2], { reps: '30,30,30', quality: 'clean' }).message,
+  getImmediateRuleAction(planData.thu.exercises[2], { reps: '30,30,30', quality: 'clean' }).message,
   'Target reached: advance to wall handstand or a harder handstand line drill.'
 );
 
 assert.equal(
-  getImmediateRuleAction(planData.tue.exercises[3], { reps: '10,10,10', quality: 'pain' }).message,
+  getImmediateRuleAction(planData.sun.exercises[3], { reps: '10,10,10', quality: 'pain' }).message,
   'Pain/ugly reps: stop or regress. Use same weight or -5% next time.'
 );
 

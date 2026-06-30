@@ -105,7 +105,7 @@
     <!-- Header -->
     <header class="bg-gray-950 px-5 pt-8 pb-4 sticky top-0 z-50">
         <h1 class="text-2xl font-extrabold tracking-tight text-white mb-1">HYBRID <span class="text-neon">PLAN</span></h1>
-        <p class="text-xs text-gray-400 mb-4">HYBRID PLAN — Tue/Thu/Fri. Choose weight = bottom reps with 1–2 RIR. No failure.</p>
+        <p class="text-xs text-gray-400 mb-4">HYBRID PLAN — Sun/Tue/Thu. Choose weight = bottom reps with 1–2 RIR. No failure.</p>
         <a href="code_artifact.html" class="mb-4 inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-lg bg-neon px-4 py-2 text-sm font-bold text-white transition hover:bg-neon-hover">
             <i class="fa-solid fa-list-check"></i>
             Daily Task Schedule
@@ -113,9 +113,9 @@
         
         <!-- Tabs -->
         <div class="flex justify-between text-sm font-semibold text-gray-500 border-b border-gray-800" id="tabs-container">
-            <button class="tab-btn active pb-2 flex-1 text-center" data-tab="tue">TUE</button>
+            <button class="tab-btn active pb-2 flex-1 text-center" data-tab="sun">SUN</button>
+            <button class="tab-btn pb-2 flex-1 text-center" data-tab="tue">TUE</button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="thu">THU</button>
-            <button class="tab-btn pb-2 flex-1 text-center" data-tab="fri">FRI</button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="inputs"><i class="fa-solid fa-table-list pointer-events-none"></i></button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="week"><i class="fa-solid fa-calendar-week pointer-events-none"></i></button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="rules"><i class="fa-solid fa-sliders pointer-events-none"></i></button>
@@ -132,8 +132,8 @@
 
 <script>
     const planData = {
-        tue: {
-            title: "TUE — GYM A",
+        sun: {
+            title: "SUN — GYM A",
             exercises: [
                 { id: 'tue-p', order: 'P', name: 'Box jump / vertical jump', sets: '3×3', rest: '60–120s', rule: 'fast 2 weeks → higher/harder' },
                 { id: 'tue-1a', order: '1A', name: 'Leg press/hack squat', sets: '3×5–8', rest: 'PAIR: A1 → A2 → rest', rule: 'top → +5kg' },
@@ -146,8 +146,8 @@
                 { id: 'tue-4b', order: '4B', name: 'Hollow/dead bug/Pallof', sets: '2×20–40s / 10–15', rest: 'Accessories 60–75s', rule: 'top → +5s/harder' }
             ]
         },
-        thu: {
-            title: "THU — GYM B",
+        tue: {
+            title: "TUE — GYM B",
             exercises: [
                 { id: 'thu-p', order: 'P', name: 'Med-ball chest throw / explosive push-up', sets: '3×4', rest: '60–120s', rule: 'fast 2 weeks → harder' },
                 { id: 'thu-1a', order: '1A', name: 'Flat DB press', sets: '3×6–10', rest: 'PAIR: A1 → A2 → rest', rule: 'top → +2–2.5kg/hand' },
@@ -160,8 +160,8 @@
                 { id: 'thu-4b', order: '4B', name: 'Hammer curl', sets: '2×8–12', rest: 'Accessories 60–75s', rule: 'top → +2kg/hand' }
             ]
         },
-        fri: {
-            title: "FRI — SKILL C",
+        thu: {
+            title: "THU — SKILL C",
             exercises: [
                 { id: 'fri-w', order: 'W', name: 'Prep wrists/shoulders/scap/hips/ankles', sets: '8min', rest: 'Prep', rule: 'move clean before skill work' },
                 { id: 'fri-p', order: 'P', name: 'Explosive band pull-up/high pull', sets: '3×2–4', rest: '60–120s', rule: 'fast 2 weeks → less band/higher pull' },
@@ -895,7 +895,7 @@
         const html = `
             <div class="space-y-6 pb-6">
                 <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
-                    <h3 class="text-lg font-bold text-neon mb-3"><i class="fa-solid fa-dumbbell mr-2"></i>HYBRID PLAN — Tue/Thu/Fri</h3>
+                    <h3 class="text-lg font-bold text-neon mb-3"><i class="fa-solid fa-dumbbell mr-2"></i>HYBRID PLAN — Sun/Tue/Thu</h3>
                     <ul class="text-sm text-gray-300 space-y-2 list-disc pl-4">
                         <li>Choose weight = bottom reps with 1–2 RIR. No failure.</li>
                         <li>PAIR: A1 → A2 → rest.</li>
@@ -1315,10 +1315,10 @@
     
     // Auto-select tab based on day
     const todayIndex = new Date().getDay(); 
-    if (todayIndex === 2) switchTab('tue');
+    if (todayIndex === 0) switchTab('sun');
+    else if (todayIndex === 2) switchTab('tue');
     else if (todayIndex === 4) switchTab('thu');
-    else if (todayIndex === 5) switchTab('fri');
-    else switchTab('tue'); // Fallback
+    else switchTab('sun'); // Fallback
 
 </script>
 </body>
