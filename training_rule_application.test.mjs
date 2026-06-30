@@ -39,13 +39,13 @@ const { planData, getImmediateRuleAction, parsePerformanceValues } = context.__t
 assert.equal(JSON.stringify(parsePerformanceValues('8, 8, 8')), JSON.stringify([8, 8, 8]));
 
 assert.equal(
-  getImmediateRuleAction(planData.tue.exercises[1], { reps: '8,8,8', quality: 'clean' }).message,
-  'Top clean: add +5kg next time.'
+  getImmediateRuleAction(planData.tue.exercises[1], { weight: '100', reps: '8,8,8', quality: 'clean' }).message,
+  'Top clean: next target 105kg.'
 );
 
 assert.equal(
   getImmediateRuleAction(planData.tue.exercises[1], { reps: '8,7,6', quality: 'clean' }).message,
-  'Not top: add +1 total clean rep next time.'
+  'Not top: next target 22 total clean reps.'
 );
 
 assert.equal(
@@ -60,7 +60,7 @@ assert.equal(
 
 assert.equal(
   getImmediateRuleAction(planData.fri.exercises[2], { reps: '30,30,30', quality: 'clean' }).message,
-  'Target reached: move to a harder level next time.'
+  'Target reached: advance to wall handstand or a harder handstand line drill.'
 );
 
 assert.equal(
@@ -70,3 +70,5 @@ assert.equal(
 
 assert.ok(html.includes('next-action'), 'Cards should render an immediate next-action result');
 assert.ok(html.includes('quality-select'), 'Cards should let the user mark quality immediately');
+assert.ok(html.includes('getNextLoadTarget'), 'Weighted work should calculate next target weight');
+assert.ok(html.includes('getSkillProgressionTarget'), 'Calisthenics work should advance to the next skill target');

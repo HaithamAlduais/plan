@@ -235,6 +235,51 @@
         return match ? match[1].trim() : 'add weight';
     }
 
+    function getProgressionIncrement(ex) {
+        const match = ex.rule.match(/\+(\d+(?:\.\d+)?)/);
+        return match ? Number(match[1]) : null;
+    }
+
+    function formatNumber(value) {
+        return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
+    }
+
+    function getNextLoadTarget(ex, log = {}) {
+        const current = parsePerformanceValues(log.weight)[0];
+        const increment = getProgressionIncrement(ex);
+        if (!current || !increment) return null;
+
+        if (ex.rule.toLowerCase().includes('less assist')) {
+            return `${formatNumber(Math.max(0, current - increment))}kg assistance`;
+        }
+
+        const suffix = ex.rule.includes('/hand') ? 'kg/hand' : 'kg';
+        return `${formatNumber(current + increment)}${suffix}`;
+    }
+
+    function getNextRepTarget(log = {}) {
+        const total = parsePerformanceValues(log.reps).reduce((sum, value) => sum + value, 0);
+        return total ? `${formatNumber(total + 1)} total clean reps` : null;
+    }
+
+    function getNextHoldTarget(log = {}) {
+        const total = parsePerformanceValues(log.reps).reduce((sum, value) => sum + value, 0);
+        return total ? `${formatNumber(total + 5)}s total` : null;
+    }
+
+    function getSkillProgressionTarget(ex) {
+        const targets = {
+            'fri-p': 'reduce band 1 step or pull higher',
+            'fri-1': 'wall handstand or a harder handstand line drill',
+            'fri-2': 'chest-to-bar prep or a harder pull-up skill',
+            'fri-3': 'straight-bar dip, transition drill, or muscle-up progression',
+            'fri-4': 'one-leg L-sit or tuck front lever progression',
+            'fri-5': 'lower box pistol or full pistol progression',
+            'tue-4b': 'harder core variation'
+        };
+        return targets[ex.id] || 'the next harder skill level';
+    }
+
     function isHoldExercise(ex) {
         return ex.sets.includes('s') || ex.rule.includes('+5s') || /handstand|l-sit|front lever/i.test(ex.name);
     }
@@ -260,7 +305,7 @@
 
         if (ex.order === 'P') {
             if (hitTop && progression.includes('band')) {
-                return { tone: 'success', message: `Top clean: ${progression} next time.` };
+                return { tone: 'success', message: `Top clean: ${getSkillProgressionTarget(ex)} next time.` };
             }
             if (quality === 'clean') {
                 return { tone: 'success', message: 'Fast today: repeat until 2 fast weeks, then go harder/+small load.' };
@@ -269,21 +314,29 @@
         }
 
         if (quality === 'not-top') {
+            const nextTarget = isHoldExercise(ex) ? getNextHoldTarget(log) : getNextRepTarget(log);
             return {
                 tone: 'warn',
-                message: isHoldExercise(ex) ? 'Not at target: add +5s total next week.' : 'Not top: add +1 total clean rep next time.'
+                message: nextTarget
+                    ? `Not top: next target ${nextTarget}.`
+                    : (isHoldExercise(ex) ? 'Not at target: add +5s total next week.' : 'Not top: add +1 total clean rep next time.')
             };
         }
 
         if (hitTop) {
-            if (isHoldExercise(ex)) return { tone: 'success', message: 'Target reached: move to a harder level next time.' };
+            if (isHoldExercise(ex)) return { tone: 'success', message: `Target reached: advance to ${getSkillProgressionTarget(ex)}.` };
+            const nextLoad = getNextLoadTarget(ex, log);
+            if (nextLoad) return { tone: 'success', message: `Top clean: next target ${nextLoad}.` };
             return { tone: 'success', message: `Top clean: add ${progression} next time.` };
         }
 
         if (values.length) {
+            const nextTarget = isHoldExercise(ex) ? getNextHoldTarget(log) : getNextRepTarget(log);
             return {
                 tone: 'warn',
-                message: isHoldExercise(ex) ? 'Not at target: add +5s total next week.' : 'Not top: add +1 total clean rep next time.'
+                message: nextTarget
+                    ? `Not top: next target ${nextTarget}.`
+                    : (isHoldExercise(ex) ? 'Not at target: add +5s total next week.' : 'Not top: add +1 total clean rep next time.')
             };
         }
 
