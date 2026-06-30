@@ -58,6 +58,13 @@
         }
         .track-input:focus { border-color: #3b82f6; }
         .quality-select { width: 116px; text-align: left; }
+        .rule-input { width: 92px; }
+        .planned-target {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            color: #bfdbfe;
+            border-radius: 8px;
+        }
         .next-action {
             background: rgba(16, 185, 129, 0.08);
             border: 1px solid rgba(16, 185, 129, 0.25);
@@ -103,6 +110,7 @@
             <button class="tab-btn active pb-2 flex-1 text-center" data-tab="tue">TUE</button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="thu">THU</button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="fri">FRI</button>
+            <button class="tab-btn pb-2 flex-1 text-center" data-tab="rules"><i class="fa-solid fa-sliders pointer-events-none"></i></button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="info"><i class="fa-solid fa-circle-info pointer-events-none"></i></button>
         </div>
     </header>
@@ -161,9 +169,13 @@
     const STORAGE_KEY_LOGS = 'hybrid_plan_logs_v2';
     const STORAGE_KEY_DATE = 'hybrid_plan_date_v2';
     const STORAGE_KEY_DONE = 'hybrid_plan_done_v2';
+    const STORAGE_KEY_TARGETS = 'hybrid_plan_targets_v1';
+    const STORAGE_KEY_RULES = 'hybrid_plan_rules_v1';
 
     let userLogs = {};
     let doneToday = {};
+    let planTargets = {};
+    let progressionRules = {};
 
     function safeGet(key) {
         try {
@@ -186,26 +198,55 @@
         catch(e) {}
     }
 
+    function getDefaultRules() {
+        return {
+            repStep: 1,
+            holdStep: 5,
+            upperIncrementKg: 2.5,
+            lowerIncrementKg: 5,
+            accessoryIncrementKg: 2.5,
+            skillWeeksPerLevel: 4,
+            deloadEveryWeeks: 4,
+            deloadLoadFactor: 0.9
+        };
+    }
+
+    function loadRules() {
+        return { ...getDefaultRules(), ...(safeGet(STORAGE_KEY_RULES) || {}) };
+    }
+
+    function saveRules() {
+        safeSet(STORAGE_KEY_RULES, progressionRules);
+    }
+
+    function prepareNewDayState(lastDate, todayStr, logs, done) {
+        if (lastDate !== todayStr) return { logs: {}, done: {}, changed: true };
+        return { logs: logs || {}, done: done || {}, changed: false };
+    }
+
     function checkDailyReset() {
         const todayStr = new Date().toDateString();
         const lastDate = safeGetDate();
-        
-        userLogs = safeGet(STORAGE_KEY_LOGS) || {};
-        
-        if (lastDate !== todayStr) {
-            // New day detected: reset checkboxes
-            doneToday = {};
+        const savedLogs = safeGet(STORAGE_KEY_LOGS) || {};
+        const savedDone = safeGet(STORAGE_KEY_DONE) || {};
+        const state = prepareNewDayState(lastDate, todayStr, savedLogs, savedDone);
+
+        userLogs = state.logs;
+        doneToday = state.done;
+        planTargets = safeGet(STORAGE_KEY_TARGETS) || {};
+        progressionRules = loadRules();
+
+        if (state.changed) {
+            safeSet(STORAGE_KEY_LOGS, userLogs);
             safeSet(STORAGE_KEY_DONE, doneToday);
             safeSetDate(todayStr);
-        } else {
-            // Same day: load existing checkboxes
-            doneToday = safeGet(STORAGE_KEY_DONE) || {};
         }
     }
 
     function saveData() {
         safeSet(STORAGE_KEY_LOGS, userLogs);
         safeSet(STORAGE_KEY_DONE, doneToday);
+        safeSet(STORAGE_KEY_TARGETS, planTargets);
     }
 
     function parsePerformanceValues(raw) {
@@ -227,6 +268,50 @@
         return single ? Number(single[1]) : null;
     }
 
+    function getBottomTarget(ex) {
+        const ranges = [...ex.sets.matchAll(/(\d+)\s*[â€“-]\s*(\d+)/g)].map((match) => Number(match[1]));
+        if (ranges.length) return Math.min(...ranges);
+        const single = ex.sets.match(/أ—\s*(\d+)/);
+        return single ? Number(single[1]) : null;
+    }
+
+    function getSetCount(ex) {
+        const match = ex.sets.match(/(\d+)\s*(?:[â€“-]\s*\d+)?\s*(?:أ—|×|x)/i);
+        return match ? Number(match[1]) : 1;
+    }
+
+    function getRepBounds(ex) {
+        const nums = parsePerformanceValues(ex.sets);
+        const setCount = nums[0] || getSetCount(ex);
+        const hasSetRange = nums.length >= 4 && nums[1] > nums[0] && nums[1] <= nums[0] + 3;
+        const bottom = hasSetRange ? nums[2] : (nums[1] || getBottomTarget(ex));
+        const topPool = hasSetRange ? nums.slice(3) : nums.slice(2);
+        const top = topPool.length ? Math.max(...topPool) : getTopTarget(ex);
+        return {
+            setCount,
+            minTotal: bottom ? setCount * bottom : null,
+            maxTotal: top ? setCount * top : null,
+            top
+        };
+    }
+
+    function didHitTop(ex, log = {}) {
+        const values = parsePerformanceValues(log.reps);
+        const bounds = getRepBounds(ex);
+        if (!bounds.top || !values.length) return false;
+        if (values.length > 1) return values.every((value) => value >= bounds.top);
+        if (values.length >= bounds.setCount) return values.every((value) => value >= bounds.top);
+        return Boolean(bounds.maxTotal && values[0] >= bounds.maxTotal);
+    }
+
+    function getExerciseCategory(ex) {
+        const label = `${ex.name} ${ex.rule}`.toLowerCase();
+        if (ex.order === 'P') return 'power';
+        if (/leg|squat|rdl|split|calf|hip thrust|ham curl|pistol/i.test(label)) return 'lower';
+        if (/curl|raise|pushdown|face pull|rear delt|hollow|dead bug|pallof/i.test(label)) return 'accessory';
+        return 'upper';
+    }
+
     function getProgressionTarget(ex) {
         const rule = ex.rule.toLowerCase();
         if (rule.includes('less band')) return 'reduce band 1 step or pull higher';
@@ -235,18 +320,32 @@
         return match ? match[1].trim() : 'add weight';
     }
 
-    function getProgressionIncrement(ex) {
+    function getProgressionIncrement(ex, rules = progressionRules) {
+        const activeRules = { ...getDefaultRules(), ...(rules || {}) };
+        const category = getExerciseCategory(ex);
         const match = ex.rule.match(/\+(\d+(?:\.\d+)?)/);
-        return match ? Number(match[1]) : null;
+        if (match && !Number.isNaN(Number(match[1]))) {
+            const explicit = Number(match[1]);
+            if (category === 'lower') return activeRules.lowerIncrementKg;
+            if (category === 'accessory') return activeRules.accessoryIncrementKg;
+            if (/1â€“2|1-2/.test(ex.rule)) return activeRules.accessoryIncrementKg;
+            if (/2â€“2\.5|2-2\.5/.test(ex.rule)) return activeRules.upperIncrementKg;
+            return explicit;
+        }
+
+        if (category === 'lower') return activeRules.lowerIncrementKg;
+        if (category === 'accessory') return activeRules.accessoryIncrementKg;
+        if (category === 'power') return 0;
+        return activeRules.upperIncrementKg;
     }
 
     function formatNumber(value) {
         return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
     }
 
-    function getNextLoadTarget(ex, log = {}) {
+    function getNextLoadTarget(ex, log = {}, rules = progressionRules) {
         const current = parsePerformanceValues(log.weight)[0];
-        const increment = getProgressionIncrement(ex);
+        const increment = getProgressionIncrement(ex, rules);
         if (!current || !increment) return null;
 
         if (ex.rule.toLowerCase().includes('less assist')) {
@@ -257,14 +356,56 @@
         return `${formatNumber(current + increment)}${suffix}`;
     }
 
-    function getNextRepTarget(log = {}) {
+    function getNextRepTarget(log = {}, rules = progressionRules) {
         const total = parsePerformanceValues(log.reps).reduce((sum, value) => sum + value, 0);
-        return total ? `${formatNumber(total + 1)} total clean reps` : null;
+        const step = Number(rules?.repStep) || getDefaultRules().repStep;
+        return total ? `${formatNumber(total + step)} total clean reps` : null;
     }
 
-    function getNextHoldTarget(log = {}) {
+    function getNextHoldTarget(log = {}, rules = progressionRules) {
         const total = parsePerformanceValues(log.reps).reduce((sum, value) => sum + value, 0);
-        return total ? `${formatNumber(total + 5)}s total` : null;
+        const step = Number(rules?.holdStep) || getDefaultRules().holdStep;
+        return total ? `${formatNumber(total + step)}s total` : null;
+    }
+
+    function getNextPlanTarget(ex, log = {}, rules = progressionRules, currentTarget = {}) {
+        const activeRules = { ...getDefaultRules(), ...(rules || {}) };
+        const values = parsePerformanceValues(log.reps);
+        const total = values.reduce((sum, value) => sum + value, 0);
+        const weight = parsePerformanceValues(log.weight)[0];
+        const result = {};
+
+        if (log.quality === 'pain' || log.quality === 'speed-drop') return { ...currentTarget };
+        if (!values.length && !log.quality) return { ...currentTarget };
+
+        if (ex.order === 'P') {
+            if (didHitTop(ex, log)) result.skill = getSkillProgressionTarget(ex);
+            return { ...currentTarget, ...result };
+        }
+
+        if (didHitTop(ex, log)) {
+            if (isHoldExercise(ex) || !weight) {
+                result.skill = getSkillProgressionTarget(ex);
+                return { ...currentTarget, ...result };
+            }
+
+            const increment = getProgressionIncrement(ex, activeRules);
+            const nextWeight = ex.rule.toLowerCase().includes('less assist')
+                ? Math.max(0, weight - increment)
+                : weight + increment;
+            result.weight = formatNumber(nextWeight);
+            result.reps = String(getRepBounds(ex).minTotal || '');
+            return result;
+        }
+
+        if (total) {
+            const step = isHoldExercise(ex) ? activeRules.holdStep : activeRules.repStep;
+            result.reps = formatNumber(total + step);
+            if (weight) result.weight = formatNumber(weight);
+            return result;
+        }
+
+        return { ...currentTarget };
     }
 
     function getSkillProgressionTarget(ex) {
@@ -287,9 +428,9 @@
     function getImmediateRuleAction(ex, log = {}) {
         const values = parsePerformanceValues(log.reps);
         const quality = log.quality || '';
-        const topTarget = getTopTarget(ex);
-        const hitTop = Boolean(topTarget && values.length && values.every((value) => value >= topTarget));
+        const hitTop = didHitTop(ex, log);
         const progression = getProgressionTarget(ex);
+        const nextPlan = getNextPlanTarget(ex, log, progressionRules, planTargets[ex.id] || {});
 
         if (quality === 'pain') {
             return { tone: 'danger', message: 'Pain/ugly reps: stop or regress. Use same weight or -5% next time.' };
@@ -317,16 +458,17 @@
             const nextTarget = isHoldExercise(ex) ? getNextHoldTarget(log) : getNextRepTarget(log);
             return {
                 tone: 'warn',
-                message: nextTarget
-                    ? `Not top: next target ${nextTarget}.`
-                    : (isHoldExercise(ex) ? 'Not at target: add +5s total next week.' : 'Not top: add +1 total clean rep next time.')
+                message: nextPlan.weight && nextPlan.reps
+                    ? `Not top: next target ${nextPlan.weight}kg x ${nextPlan.reps} total clean reps.`
+                    : (nextTarget
+                        ? `Not top: next target ${nextTarget}.`
+                        : (isHoldExercise(ex) ? 'Not at target: add +5s total next week.' : 'Not top: add +1 total clean rep next time.'))
             };
         }
 
         if (hitTop) {
             if (isHoldExercise(ex)) return { tone: 'success', message: `Target reached: advance to ${getSkillProgressionTarget(ex)}.` };
-            const nextLoad = getNextLoadTarget(ex, log);
-            if (nextLoad) return { tone: 'success', message: `Top clean: next target ${nextLoad}.` };
+            if (nextPlan.weight && nextPlan.reps) return { tone: 'success', message: `Top clean: next target ${nextPlan.weight}kg x ${nextPlan.reps} total reps.` };
             return { tone: 'success', message: `Top clean: add ${progression} next time.` };
         }
 
@@ -334,22 +476,58 @@
             const nextTarget = isHoldExercise(ex) ? getNextHoldTarget(log) : getNextRepTarget(log);
             return {
                 tone: 'warn',
-                message: nextTarget
-                    ? `Not top: next target ${nextTarget}.`
-                    : (isHoldExercise(ex) ? 'Not at target: add +5s total next week.' : 'Not top: add +1 total clean rep next time.')
+                message: nextPlan.weight && nextPlan.reps
+                    ? `Not top: next target ${nextPlan.weight}kg x ${nextPlan.reps} total clean reps.`
+                    : (nextTarget
+                        ? `Not top: next target ${nextTarget}.`
+                        : (isHoldExercise(ex) ? 'Not at target: add +5s total next week.' : 'Not top: add +1 total clean rep next time.'))
             };
         }
 
         return { tone: 'idle', message: 'Choose quality to apply the progression rule.' };
     }
 
+    function getDisplayLog(id) {
+        const saved = userLogs[id] || {};
+        const target = planTargets[id] || {};
+        return {
+            weight: Object.prototype.hasOwnProperty.call(saved, 'weight') ? saved.weight : (target.weight || ''),
+            reps: Object.prototype.hasOwnProperty.call(saved, 'reps') ? saved.reps : (target.reps || ''),
+            quality: saved.quality || '',
+        };
+    }
+
+    function targetSummary(target = {}) {
+        const parts = [];
+        if (target.weight) parts.push(`${target.weight}kg`);
+        if (target.reps) parts.push(`${target.reps}${String(target.reps).includes('s') ? '' : ' total reps'}`);
+        if (target.skill) parts.push(target.skill);
+        return parts.join(' x ');
+    }
+
+    function saveNextTarget(id) {
+        const ex = findExerciseById(id);
+        if (!ex) return;
+        const target = getNextPlanTarget(ex, getDisplayLog(id), progressionRules, planTargets[id] || {});
+        if (target && Object.keys(target).length) {
+            planTargets[id] = target;
+            saveData();
+        }
+    }
+
     function updateNextAction(id) {
         const ex = findExerciseById(id);
         const actionEl = document.querySelector(`[data-next-action="${id}"]`);
         if (!ex || !actionEl) return;
-        const action = getImmediateRuleAction(ex, userLogs[id] || {});
+        const action = getImmediateRuleAction(ex, getDisplayLog(id));
         actionEl.textContent = action.message;
         actionEl.dataset.tone = action.tone;
+
+        const plannedEl = document.querySelector(`[data-planned-target="${id}"]`);
+        if (plannedEl) {
+            const summary = targetSummary(planTargets[id]);
+            plannedEl.textContent = summary ? `Next planned: ${summary}` : 'Next planned: log this set to build the target';
+        }
     }
 
     function renderWorkout(dayId) {
@@ -369,10 +547,12 @@
             }
 
             const isDone = doneToday[ex.id] || false;
-            const logW = userLogs[ex.id]?.weight || '';
-            const logR = userLogs[ex.id]?.reps || '';
-            const logQ = userLogs[ex.id]?.quality || '';
-            const action = getImmediateRuleAction(ex, userLogs[ex.id] || {});
+            const displayLog = getDisplayLog(ex.id);
+            const logW = displayLog.weight || '';
+            const logR = displayLog.reps || '';
+            const logQ = displayLog.quality || '';
+            const planned = targetSummary(planTargets[ex.id]);
+            const action = getImmediateRuleAction(ex, displayLog);
 
             let badgeColor = 'bg-neon text-white'; // default
             if (isPower) badgeColor = 'bg-power text-black';
@@ -411,6 +591,10 @@
                             <option value="speed-drop" ${logQ === 'speed-drop' ? 'selected' : ''}>speed drop</option>
                             <option value="pain" ${logQ === 'pain' ? 'selected' : ''}>pain / ugly</option>
                         </select>
+                    </div>` : ''}
+                    ${ex.order !== 'W' ? `
+                    <div class="planned-target mt-3 p-2 text-xs font-semibold" data-planned-target="${ex.id}">
+                        ${planned ? `Next planned: ${planned}` : 'Next planned: log this set to build the target'}
                     </div>` : ''}
                     <div class="next-action mt-3 p-3 text-xs font-semibold" data-next-action="${ex.id}" data-tone="${action.tone}">
                         ${action.message}
@@ -478,6 +662,51 @@
         document.getElementById('main-content').innerHTML = html;
     }
 
+    function renderRules() {
+        const rules = { ...getDefaultRules(), ...progressionRules };
+        const rows = [
+            { key: 'repStep', label: 'Rep step', suffix: 'rep' },
+            { key: 'holdStep', label: 'Hold step', suffix: 'sec' },
+            { key: 'upperIncrementKg', label: 'Upper increment', suffix: 'kg' },
+            { key: 'lowerIncrementKg', label: 'Lower increment', suffix: 'kg' },
+            { key: 'accessoryIncrementKg', label: 'Accessory increment', suffix: 'kg' },
+            { key: 'skillWeeksPerLevel', label: 'Skill level window', suffix: 'weeks' },
+            { key: 'deloadEveryWeeks', label: 'Deload every', suffix: 'weeks' },
+            { key: 'deloadLoadFactor', label: 'Deload load factor', suffix: 'x' }
+        ];
+
+        const html = `
+            <div class="space-y-4 pb-6">
+                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
+                    <h2 class="text-xl font-bold text-white mb-4"><i class="fa-solid fa-sliders mr-2 text-neon"></i>Rules</h2>
+                    <div class="space-y-3">
+                        ${rows.map((row) => `
+                            <label class="flex items-center justify-between gap-3 rounded-lg bg-gray-800 px-3 py-3">
+                                <span class="text-sm font-semibold text-gray-200">${row.label}</span>
+                                <span class="flex items-center gap-2">
+                                    <input type="number" step="0.1" class="track-input rule-input" data-rule="${row.key}" value="${rules[row.key]}">
+                                    <span class="w-12 text-xs text-gray-400">${row.suffix}</span>
+                                </span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </section>
+
+                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
+                    <h3 class="text-lg font-bold text-power mb-3"><i class="fa-solid fa-table-cells mr-2"></i>Planner Model</h3>
+                    <ul class="text-sm text-gray-300 space-y-2 list-disc pl-4">
+                        <li>Top clean: add load, then restart at bottom total reps.</li>
+                        <li>Not top: keep load and add the rep step to total clean reps.</li>
+                        <li>Holds: keep level and add the hold step until the target is clean.</li>
+                        <li>Pain, ugly reps, or speed drop: keep the current plan target.</li>
+                        <li>e1RM guide: load x (1 + (reps + RIR) / 30).</li>
+                    </ul>
+                </section>
+            </div>
+        `;
+        document.getElementById('main-content').innerHTML = html;
+    }
+
     function switchTab(tabId) {
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.classList.remove('active', 'text-white', 'border-b-2', 'border-neon');
@@ -487,6 +716,7 @@
         });
 
         if (tabId === 'info') renderInfo();
+        else if (tabId === 'rules') renderRules();
         else renderWorkout(tabId);
     }
 
@@ -510,6 +740,7 @@
             const id = e.target.dataset.id;
             if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
             userLogs[id].weight = e.target.value;
+            saveNextTarget(id);
             saveData();
             updateNextAction(id);
         }
@@ -517,6 +748,7 @@
             const id = e.target.dataset.id;
             if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
             userLogs[id].reps = e.target.value;
+            saveNextTarget(id);
             saveData();
             updateNextAction(id);
         }
@@ -527,8 +759,17 @@
             const id = e.target.dataset.id;
             if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
             userLogs[id].quality = e.target.value;
+            saveNextTarget(id);
             saveData();
             updateNextAction(id);
+        }
+        if (e.target.classList.contains('rule-input')) {
+            const key = e.target.dataset.rule;
+            const value = Number(e.target.value);
+            progressionRules[key] = Number.isFinite(value) ? value : getDefaultRules()[key];
+            saveRules();
+            saveData();
+            renderRules();
         }
     });
 

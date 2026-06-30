@@ -32,20 +32,59 @@ globalThis.__trainingRules = {
   planData,
   getImmediateRuleAction,
   parsePerformanceValues,
+  getDefaultRules,
+  getNextPlanTarget,
+  prepareNewDayState,
 };`, context);
 
-const { planData, getImmediateRuleAction, parsePerformanceValues } = context.__trainingRules;
+const {
+  planData,
+  getImmediateRuleAction,
+  parsePerformanceValues,
+  getDefaultRules,
+  getNextPlanTarget,
+  prepareNewDayState,
+} = context.__trainingRules;
 
 assert.equal(JSON.stringify(parsePerformanceValues('8, 8, 8')), JSON.stringify([8, 8, 8]));
 
 assert.equal(
   getImmediateRuleAction(planData.tue.exercises[1], { weight: '100', reps: '8,8,8', quality: 'clean' }).message,
-  'Top clean: next target 105kg.'
+  'Top clean: next target 105kg x 15 total reps.'
 );
 
 assert.equal(
-  getImmediateRuleAction(planData.tue.exercises[1], { reps: '8,7,6', quality: 'clean' }).message,
-  'Not top: next target 22 total clean reps.'
+  getImmediateRuleAction(planData.tue.exercises[1], { weight: '100', reps: '8,7,6', quality: 'clean' }).message,
+  'Not top: next target 100kg x 22 total clean reps.'
+);
+
+const topCleanTarget = getNextPlanTarget(planData.tue.exercises[1], { weight: '100', reps: '8,8,8', quality: 'clean' });
+assert.equal(topCleanTarget.weight, '105');
+assert.equal(topCleanTarget.reps, '15');
+
+const notTopTarget = getNextPlanTarget(planData.tue.exercises[1], { weight: '100', reps: '8,7,6', quality: 'clean' });
+assert.equal(notTopTarget.weight, '100');
+assert.equal(notTopTarget.reps, '22');
+
+const customIncrementTarget = getNextPlanTarget(
+  planData.tue.exercises[1],
+  { weight: '100', reps: '8,8,8', quality: 'clean' },
+  { ...getDefaultRules(), lowerIncrementKg: 10 }
+);
+assert.equal(customIncrementTarget.weight, '110');
+assert.equal(customIncrementTarget.reps, '15');
+
+const tweakedWeightTarget = getNextPlanTarget(
+  planData.tue.exercises[1],
+  { weight: '97.5', reps: '8,8,8', quality: 'clean' },
+  { ...getDefaultRules(), lowerIncrementKg: 5 }
+);
+assert.equal(tweakedWeightTarget.weight, '102.5');
+assert.equal(tweakedWeightTarget.reps, '15');
+
+assert.equal(
+  JSON.stringify(prepareNewDayState('Mon Jun 29 2026', 'Tue Jun 30 2026', { 'tue-1a': { weight: '100' } }, { 'tue-1a': true })),
+  JSON.stringify({ logs: {}, done: {}, changed: true })
 );
 
 assert.equal(
@@ -70,5 +109,7 @@ assert.equal(
 
 assert.ok(html.includes('next-action'), 'Cards should render an immediate next-action result');
 assert.ok(html.includes('quality-select'), 'Cards should let the user mark quality immediately');
-assert.ok(html.includes('getNextLoadTarget'), 'Weighted work should calculate next target weight');
+assert.ok(html.includes('getNextPlanTarget'), 'Weighted work should calculate next target weight and reps');
 assert.ok(html.includes('getSkillProgressionTarget'), 'Calisthenics work should advance to the next skill target');
+assert.ok(html.includes('data-tab="rules"'), 'The tracker should include an editable rules page');
+assert.ok(html.includes('rule-input'), 'Rules should be editable from the rules page');
