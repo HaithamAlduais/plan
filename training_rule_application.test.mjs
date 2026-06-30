@@ -42,6 +42,7 @@ globalThis.__trainingRules = {
   getProjectedSkillPlan,
   getBaselinePlanTarget,
   hasExerciseInput,
+  mapWorkoutLogToExerciseInput,
 };`, context);
 
 const {
@@ -58,6 +59,7 @@ const {
   getProjectedSkillPlan,
   getBaselinePlanTarget,
   hasExerciseInput,
+  mapWorkoutLogToExerciseInput,
 } = context.__trainingRules;
 
 assert.equal(JSON.stringify(parsePerformanceValues('8, 8, 8')), JSON.stringify([8, 8, 8]));
@@ -156,6 +158,14 @@ assert.equal(overriddenSkillPlan.drill, 'Deficit/wall HSPU or freestanding HSPU 
 
 assert.equal(hasExerciseInput({ currentLoad: '100' }), true);
 assert.equal(hasExerciseInput({ currentLoad: '', currentReps: '', rir: '' }), false);
+assert.equal(
+  JSON.stringify(mapWorkoutLogToExerciseInput({ weight: '100', reps: '8', rir: '2' }, { directE1RM: '150' })),
+  JSON.stringify({ directE1RM: '150', currentLoad: '100', currentReps: '8', rir: '2' })
+);
+assert.equal(
+  JSON.stringify(mapWorkoutLogToExerciseInput({ skillLevel: '3' }, { currentLoad: '100' })),
+  JSON.stringify({ currentLoad: '100', skillLevel: '3' })
+);
 
 assert.equal(
   getImmediateRuleAction(planData.thu.exercises[0], { reps: 'fast', quality: 'speed-drop' }).message,
@@ -188,3 +198,4 @@ assert.ok(html.includes('getProjectedLoadPlan'), 'The tracker should project %1R
 assert.ok(html.includes('rir-input'), 'Cards should capture RIR for e1RM calculations');
 assert.ok(html.includes('data-tab="inputs"'), 'The tracker should include an Excel-style per-exercise Inputs page');
 assert.ok(html.includes('planner-input'), 'Exercise baselines should be editable like the Excel Inputs sheet');
+assert.ok(html.includes('skill-level-input'), 'Skill levels should be adjustable from day cards and synced to Exercise Inputs');

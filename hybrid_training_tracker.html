@@ -488,6 +488,19 @@
         return ['directE1RM', 'currentLoad', 'currentReps', 'rir', 'skillLevel'].some((key) => String(input[key] ?? '').trim() !== '');
     }
 
+    function mapWorkoutLogToExerciseInput(log = {}, existing = {}) {
+        const next = { ...existing };
+        if (Object.prototype.hasOwnProperty.call(log, 'weight')) next.currentLoad = log.weight;
+        if (Object.prototype.hasOwnProperty.call(log, 'reps')) next.currentReps = log.reps;
+        if (Object.prototype.hasOwnProperty.call(log, 'rir')) next.rir = log.rir;
+        if (Object.prototype.hasOwnProperty.call(log, 'skillLevel')) next.skillLevel = log.skillLevel;
+        return next;
+    }
+
+    function syncExerciseInputFromWorkout(id, log = {}) {
+        exerciseInputs[id] = mapWorkoutLogToExerciseInput(log, exerciseInputs[id] || {});
+    }
+
     function getPlannerInput(id) {
         const input = exerciseInputs[id] || {};
         return hasExerciseInput(input) ? input : getDisplayLog(id);
@@ -813,6 +826,7 @@
             const logW = displayLog.weight || '';
             const logR = displayLog.reps || '';
             const logRir = displayLog.rir || '';
+            const logSkillLevel = exerciseInputs[ex.id]?.skillLevel || '';
             const logQ = displayLog.quality || '';
             const planned = targetSummary(planTargets[ex.id]);
             const weekNumber = getCurrentWeek(progressionRules);
@@ -850,6 +864,7 @@
                         <input type="text" placeholder="kg/lbs" class="track-input weight-input" data-id="${ex.id}" value="${logW}">
                         <input type="text" placeholder="reps/sec" class="track-input reps-input" data-id="${ex.id}" value="${logR}">
                         <input type="text" placeholder="RIR" class="track-input rir-input" data-id="${ex.id}" value="${logRir}">
+                        ${exercisePlannerMeta[ex.id]?.type === 'Skill' ? `<input type="number" min="0" max="3" step="1" placeholder="Level" class="track-input skill-level-input" data-id="${ex.id}" value="${logSkillLevel}">` : ''}
                         <select class="track-input quality-select" data-id="${ex.id}">
                             <option value="" ${logQ === '' ? 'selected' : ''}>quality</option>
                             <option value="clean" ${logQ === 'clean' ? 'selected' : ''}>clean / fast</option>
@@ -1212,6 +1227,7 @@
             const id = e.target.dataset.id;
             if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
             userLogs[id].weight = e.target.value;
+            syncExerciseInputFromWorkout(id, { weight: e.target.value });
             saveNextTarget(id);
             saveData();
             updateNextAction(id);
@@ -1220,6 +1236,7 @@
             const id = e.target.dataset.id;
             if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
             userLogs[id].reps = e.target.value;
+            syncExerciseInputFromWorkout(id, { reps: e.target.value });
             saveNextTarget(id);
             saveData();
             updateNextAction(id);
@@ -1228,7 +1245,19 @@
             const id = e.target.dataset.id;
             if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
             userLogs[id].rir = e.target.value;
+            syncExerciseInputFromWorkout(id, { rir: e.target.value });
             saveNextTarget(id);
+            saveData();
+            updateNextAction(id);
+        }
+        if (e.target.classList.contains('skill-level-input')) {
+            const id = e.target.dataset.id;
+            const level = e.target.value === '' ? '' : String(clamp(Number(e.target.value), 0, 3));
+            if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
+            userLogs[id].skillLevel = level;
+            syncExerciseInputFromWorkout(id, { skillLevel: level });
+            const ex = findExerciseById(id);
+            if (ex) planTargets[id] = getBaselinePlanTarget(ex, getCurrentWeek(progressionRules), progressionRules, exerciseInputs[id] || {});
             saveData();
             updateNextAction(id);
         }
