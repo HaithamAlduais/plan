@@ -12,10 +12,8 @@ const requiredSnippets = [
   'top → +5kg / less assist 5kg',
   'Prep wrists/shoulders/scap/hips/ankles',
   'less band/higher pull',
-  'Power: never grind. If speed drops → stop. Fast 2 weeks → harder/+small load.',
-  'Pain/ugly reps → stop or regress.',
-  'Top clean → add weight. Not top → +1 total rep.',
-  'L3: banded muscle-up, explosive high pull, wall HSPU negative, advanced tuck front lever, full L-sit.'
+  'pain/ugly reps → stop or regress',
+  'skill-level-input'
 ];
 
 for (const snippet of requiredSnippets) {

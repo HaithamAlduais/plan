@@ -108,6 +108,8 @@ assert.equal(getWeekPhase(6), 'Strength-skill bridge');
 assert.equal(isDeloadWeek(4, { ...getDefaultRules(), deloadEveryWeeks: 4 }), true);
 assert.equal(isDeloadWeek(5, { ...getDefaultRules(), deloadEveryWeeks: 4 }), false);
 assert.equal(estimateOneRepMax({ weight: '100', reps: '8', rir: '2' }), 133.33);
+assert.equal(estimateOneRepMax({ weight: '100', reps: '8', rir: '0' }), 133.33);
+assert.equal(estimateOneRepMax({ weight: '100', reps: '8' }), 133.33);
 
 const deloadPlan = getProjectedLoadPlan(
   planData.sun.exercises[1],
@@ -160,7 +162,7 @@ assert.equal(hasExerciseInput({ currentLoad: '100' }), true);
 assert.equal(hasExerciseInput({ currentLoad: '', currentReps: '', rir: '' }), false);
 assert.equal(
   JSON.stringify(mapWorkoutLogToExerciseInput({ weight: '100', reps: '8', rir: '2' }, { directE1RM: '150' })),
-  JSON.stringify({ directE1RM: '150', currentLoad: '100', currentReps: '8', rir: '2' })
+  JSON.stringify({ directE1RM: '150', currentLoad: '100', currentReps: '8' })
 );
 assert.equal(
   JSON.stringify(mapWorkoutLogToExerciseInput({ skillLevel: '3' }, { currentLoad: '100' })),
@@ -187,15 +189,44 @@ assert.equal(
   'Pain/ugly reps: stop or regress. Use same weight or -5% next time.'
 );
 
+const simpleTabs = [...html.matchAll(/data-tab="([^"]+)"/g)].map((match) => match[1]);
+assert.deepEqual(simpleTabs, ['sun', 'tue', 'thu'], 'The app should show only the 3 training day panels');
+assert.equal(html.includes('rir-input'), false, 'RIR should be automated, not entered manually');
+assert.equal(html.includes('rule-input'), false, 'Progress rules should be automated from the simple plan');
+assert.equal(html.includes('planner-input'), false, 'Exercise inputs should come from the 3 day panels only');
+assert.equal(html.includes('week-input'), false, 'Week planning should be automated, not a separate panel');
+assert.equal(html.includes('function renderInfo'), false, 'Removed panels should not keep dead renderers');
+assert.equal(html.includes('function renderWeekView'), false, 'Week panel renderer should be removed');
+assert.equal(html.includes('function renderInputs'), false, 'Exercise Inputs panel renderer should be removed');
+assert.equal(html.includes('function renderRules'), false, 'Rules panel renderer should be removed');
+
+let monthTarget = { weight: '100', reps: '15' };
+monthTarget = getNextPlanTarget(planData.sun.exercises[1], { weight: '100', reps: '5,5,5', quality: 'clean' }, getDefaultRules(), monthTarget);
+assert.equal(monthTarget.weight, '100', 'Week 1 not-top should keep load');
+assert.equal(monthTarget.reps, '16', 'Week 1 not-top should add 1 total rep');
+monthTarget = getNextPlanTarget(planData.sun.exercises[1], { weight: '100', reps: '8,8,8', quality: 'clean' }, getDefaultRules(), monthTarget);
+assert.equal(monthTarget.weight, '105', 'Week 2 top-clean should add load');
+assert.equal(monthTarget.reps, '15', 'Week 2 top-clean should reset bottom reps');
+monthTarget = getNextPlanTarget(planData.tue.exercises[0], { reps: 'fast', quality: 'speed-drop' }, getDefaultRules(), { skill: 'higher box' });
+assert.equal(monthTarget.skill, 'higher box', 'Week 3 power speed-drop should keep the current target');
+monthTarget = getNextPlanTarget(planData.sun.exercises[1], { weight: '105', reps: '5,5,5', quality: 'pain' }, getDefaultRules(), { weight: '105', reps: '15' });
+assert.equal(monthTarget.weight, '105', 'Week 4 pain should keep load');
+assert.equal(monthTarget.reps, '15', 'Week 4 pain should keep reps');
+
+assert.equal(
+  getNextPlanTarget(planData.sun.exercises[8], { reps: '40,40', quality: 'clean' }, getDefaultRules(), {}).skill,
+  'harder core variation',
+  'Hold target reached should move to harder skill'
+);
+assert.equal(
+  getNextPlanTarget(planData.thu.exercises[2], { reps: '30,30,30', quality: 'clean' }, getDefaultRules(), {}).skill,
+  'wall handstand or a harder handstand line drill',
+  'Skill target reached should move to harder skill'
+);
+
 assert.ok(html.includes('next-action'), 'Cards should render an immediate next-action result');
 assert.ok(html.includes('quality-select'), 'Cards should let the user mark quality immediately');
 assert.ok(html.includes('getNextPlanTarget'), 'Weighted work should calculate next target weight and reps');
 assert.ok(html.includes('getSkillProgressionTarget'), 'Calisthenics work should advance to the next skill target');
-assert.ok(html.includes('data-tab="rules"'), 'The tracker should include an editable rules page');
-assert.ok(html.includes('rule-input'), 'Rules should be editable from the rules page');
-assert.ok(html.includes('data-tab="week"'), 'The tracker should include an Excel-style weekly plan view');
 assert.ok(html.includes('getProjectedLoadPlan'), 'The tracker should project %1RM loads from anchors and e1RM');
-assert.ok(html.includes('rir-input'), 'Cards should capture RIR for e1RM calculations');
-assert.ok(html.includes('data-tab="inputs"'), 'The tracker should include an Excel-style per-exercise Inputs page');
-assert.ok(html.includes('planner-input'), 'Exercise baselines should be editable like the Excel Inputs sheet');
 assert.ok(html.includes('skill-level-input'), 'Skill levels should be adjustable from day cards and synced to Exercise Inputs');

@@ -58,7 +58,6 @@
         }
         .track-input:focus { border-color: #3b82f6; }
         .quality-select { width: 116px; text-align: left; }
-        .rule-input { width: 92px; }
         .planned-target {
             background: rgba(59, 130, 246, 0.1);
             border: 1px solid rgba(59, 130, 246, 0.25);
@@ -105,21 +104,13 @@
     <!-- Header -->
     <header class="bg-gray-950 px-5 pt-8 pb-4 sticky top-0 z-50">
         <h1 class="text-2xl font-extrabold tracking-tight text-white mb-1">HYBRID <span class="text-neon">PLAN</span></h1>
-        <p class="text-xs text-gray-400 mb-4">HYBRID PLAN — Sun/Tue/Thu. Choose weight = bottom reps with 1–2 RIR. No failure.</p>
-        <a href="code_artifact.html" class="mb-4 inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-lg bg-neon px-4 py-2 text-sm font-bold text-white transition hover:bg-neon-hover">
-            <i class="fa-solid fa-list-check"></i>
-            Daily Task Schedule
-        </a>
-        
+        <p class="text-xs text-gray-400 mb-2">HYBRID PLAN — Sun/Tue/Thu. Choose weight = bottom reps with 1–2 RIR. No failure.</p>
+        <p class="text-xs text-gray-500 mb-4">Power first: 60–120s rest, all reps fast. RULE: top reps all sets clean → add weight. Not top → +1 total rep.</p>
         <!-- Tabs -->
         <div class="flex justify-between text-sm font-semibold text-gray-500 border-b border-gray-800" id="tabs-container">
             <button class="tab-btn active pb-2 flex-1 text-center" data-tab="sun">SUN</button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="tue">TUE</button>
             <button class="tab-btn pb-2 flex-1 text-center" data-tab="thu">THU</button>
-            <button class="tab-btn pb-2 flex-1 text-center" data-tab="inputs"><i class="fa-solid fa-table-list pointer-events-none"></i></button>
-            <button class="tab-btn pb-2 flex-1 text-center" data-tab="week"><i class="fa-solid fa-calendar-week pointer-events-none"></i></button>
-            <button class="tab-btn pb-2 flex-1 text-center" data-tab="rules"><i class="fa-solid fa-sliders pointer-events-none"></i></button>
-            <button class="tab-btn pb-2 flex-1 text-center" data-tab="info"><i class="fa-solid fa-circle-info pointer-events-none"></i></button>
         </div>
     </header>
 
@@ -479,20 +470,19 @@
     function estimateOneRepMax(log = {}, rules = progressionRules) {
         const weight = parsePerformanceValues(log.currentLoad ?? log.weight)[0];
         const reps = parsePerformanceValues(log.currentReps ?? log.reps)[0];
-        const rir = parsePerformanceValues(log.rir)[0] ?? Number(rules?.defaultRir ?? getDefaultRules().defaultRir);
+        const rir = Number(rules?.defaultRir ?? getDefaultRules().defaultRir);
         if (!weight || !reps) return null;
         return Number((weight * (1 + ((reps + rir) / 30))).toFixed(2));
     }
 
     function hasExerciseInput(input = {}) {
-        return ['directE1RM', 'currentLoad', 'currentReps', 'rir', 'skillLevel'].some((key) => String(input[key] ?? '').trim() !== '');
+        return ['directE1RM', 'currentLoad', 'currentReps', 'skillLevel'].some((key) => String(input[key] ?? '').trim() !== '');
     }
 
     function mapWorkoutLogToExerciseInput(log = {}, existing = {}) {
         const next = { ...existing };
         if (Object.prototype.hasOwnProperty.call(log, 'weight')) next.currentLoad = log.weight;
         if (Object.prototype.hasOwnProperty.call(log, 'reps')) next.currentReps = log.reps;
-        if (Object.prototype.hasOwnProperty.call(log, 'rir')) next.rir = log.rir;
         if (Object.prototype.hasOwnProperty.call(log, 'skillLevel')) next.skillLevel = log.skillLevel;
         return next;
     }
@@ -760,7 +750,6 @@
         return {
             weight: Object.prototype.hasOwnProperty.call(saved, 'weight') ? saved.weight : (target.weight || ''),
             reps: Object.prototype.hasOwnProperty.call(saved, 'reps') ? saved.reps : (target.reps || ''),
-            rir: Object.prototype.hasOwnProperty.call(saved, 'rir') ? saved.rir : '',
             quality: saved.quality || '',
         };
     }
@@ -825,7 +814,6 @@
             const displayLog = getDisplayLog(ex.id);
             const logW = displayLog.weight || '';
             const logR = displayLog.reps || '';
-            const logRir = displayLog.rir || '';
             const logSkillLevel = exerciseInputs[ex.id]?.skillLevel || '';
             const logQ = displayLog.quality || '';
             const planned = targetSummary(planTargets[ex.id]);
@@ -863,7 +851,6 @@
                     <div class="mt-4 pt-3 border-t border-gray-800 flex flex-wrap justify-end gap-2">
                         <input type="text" placeholder="kg/lbs" class="track-input weight-input" data-id="${ex.id}" value="${logW}">
                         <input type="text" placeholder="reps/sec" class="track-input reps-input" data-id="${ex.id}" value="${logR}">
-                        <input type="text" placeholder="RIR" class="track-input rir-input" data-id="${ex.id}" value="${logRir}">
                         ${exercisePlannerMeta[ex.id]?.type === 'Skill' ? `<input type="number" min="0" max="3" step="1" placeholder="Level" class="track-input skill-level-input" data-id="${ex.id}" value="${logSkillLevel}">` : ''}
                         <select class="track-input quality-select" data-id="${ex.id}">
                             <option value="" ${logQ === '' ? 'selected' : ''}>quality</option>
@@ -891,310 +878,16 @@
         document.getElementById('main-content').innerHTML = html;
     }
 
-    function renderInfo() {
-        const html = `
-            <div class="space-y-6 pb-6">
-                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
-                    <h3 class="text-lg font-bold text-neon mb-3"><i class="fa-solid fa-dumbbell mr-2"></i>HYBRID PLAN — Sun/Tue/Thu</h3>
-                    <ul class="text-sm text-gray-300 space-y-2 list-disc pl-4">
-                        <li>Choose weight = bottom reps with 1–2 RIR. No failure.</li>
-                        <li>PAIR: A1 → A2 → rest.</li>
-                        <li>Power first: 60–120s rest, all reps fast.</li>
-                        <li>Heavy pairs 2min. Accessories 60–75s.</li>
-                        <li>RULE: top reps all sets clean → add weight. Not top → +1 total rep.</li>
-                    </ul>
-                </section>
-
-                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
-                    <h3 class="text-lg font-bold text-power mb-3"><i class="fa-solid fa-bolt mr-2"></i>Power</h3>
-                    <ul class="text-sm text-gray-300 space-y-2 list-disc pl-4">
-                        <li>Power is small, fast, and first.</li>
-                        <li>Best target: 30–70% 1RM, fast concentric intent, low-to-moderate volume.</li>
-                        <li>Power: never grind. If speed drops → stop. Fast 2 weeks → harder/+small load.</li>
-                    </ul>
-                </section>
-
-                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
-                    <h3 class="text-lg font-bold text-neon mb-3"><i class="fa-solid fa-arrow-up-right-dots mr-2"></i>Progress</h3>
-                    <ul class="text-sm text-gray-300 space-y-2 list-disc pl-4">
-                        <li>Holds: +5s total/week until target → harder level.</li>
-                        <li>Reps: +1 total clean rep/week.</li>
-                        <li>Bands/assist: reduce 1 step only after top reps clean.</li>
-                        <li>Pain/ugly reps → stop or regress.</li>
-                    </ul>
-                </section>
-
-                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
-                    <h3 class="text-lg font-bold text-white mb-3"><i class="fa-solid fa-layer-group mr-2 text-neon"></i>Skill Levels</h3>
-                    <ul class="text-sm text-gray-300 space-y-2 list-disc pl-4">
-                        <li>L0: active hang, scap pull-up, inverted row, band pull-up, wall plank, feet-assisted support, tuck sit, box pistol. Advance: 30s hang + 3×8 rows + 3×6 band pull-ups + 20s wall plank.</li>
-                        <li>L1: strict singles/band volume, wall handstand, assisted dip, tuck L-sit, tuck lever row, box pistol. Advance: 3×3 pull-ups + 3×6 assisted dips + 3×20s wall handstand.</li>
-                        <li>L2: chest-to-bar prep, straight-bar dip, transition drill, toe pulls, one-leg L-sit, tuck front lever. Advance: 8–10 pull-ups + 8–10 dips + 4×15s tuck L-sit + 3×12s tuck lever.</li>
-                        <li>L3: banded muscle-up, explosive high pull, wall HSPU negative, advanced tuck front lever, full L-sit. Advance: clean muscle-up + 20s L-sit + stable wall HSPU eccentric.</li>
-                    </ul>
-                </section>
-
-                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
-                    <h3 class="text-lg font-bold text-white mb-3"><i class="fa-solid fa-scale-balanced mr-2 text-neon"></i>Global</h3>
-                    <ul class="text-sm text-gray-300 space-y-2 list-disc pl-4">
-                        <li>No ugly reps. No failed compounds. Skills stop at ~20% quality drop.</li>
-                        <li>Pain/form loss → same weight or −5%.</li>
-                        <li>Top clean → add weight. Not top → +1 total rep.</li>
-                    </ul>
-                </section>
-            </div>
-        `;
-        document.getElementById('main-content').innerHTML = html;
-    }
-
-    function getAllExercisesWithDay() {
-        return Object.entries(planData).flatMap(([dayId, day]) => (
-            day.exercises.map((ex) => ({ ...ex, dayId, dayTitle: day.title }))
-        ));
-    }
-
-    function renderWeekView() {
-        const rules = { ...getDefaultRules(), ...progressionRules };
-        const selectedWeek = clamp(Number(rules.selectedWeek) || getCurrentWeek(rules), 1, Number(rules.planWeeks) || 24);
-        const skillRows = [
-            ['handstand', 'Handstand / HSPU'],
-            ['pullSkill', 'Pull / Muscle-Up'],
-            ['ringDip', 'Ring / Dip'],
-            ['pistol', 'Pistol Squat'],
-            ['frontLever', 'Front Lever'],
-            ['lSit', 'L-Sit / Compression']
-        ];
-        const exercises = getAllExercisesWithDay().filter((ex) => ex.order !== 'W');
-
-        const html = `
-            <div class="space-y-4 pb-6">
-                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
-                    <div class="flex items-center justify-between gap-3 mb-3">
-                        <div>
-                            <h2 class="text-xl font-bold text-white">Week ${selectedWeek}</h2>
-                            <p class="text-xs text-gray-400">${getWeekPhase(selectedWeek)} • ${isDeloadWeek(selectedWeek, rules) ? 'Deload' : 'Build'} • ${rules.planWeeks} week plan</p>
-                        </div>
-                        <input type="number" min="1" max="${rules.planWeeks}" class="track-input week-input" value="${selectedWeek}">
-                    </div>
-                    <div class="space-y-2">
-                        ${exercises.map((ex) => {
-                            const projection = getProjectedLoadPlan(ex, selectedWeek, rules, getPlannerInput(ex.id));
-                            return `
-                                <div class="rounded-lg bg-gray-800 p-3 text-xs">
-                                    <div class="flex items-start justify-between gap-3">
-                                        <div>
-                                            <div class="font-bold text-gray-100">${ex.dayTitle.replace(' â€” ', ' ')} • ${ex.order} ${ex.name}</div>
-                                            <div class="text-gray-400">${projection.type} • sets ${projection.sets} • ${ex.sets}</div>
-                                        </div>
-                                        <div class="text-right font-bold ${projection.deload ? 'text-power' : 'text-neon'}">
-                                            ${projection.load ? `${projection.load}kg` : projection.type}
-                                        </div>
-                                    </div>
-                                    <div class="mt-2 text-gray-300">
-                                        ${projection.percent ? `${Math.round(projection.percent * 100)}% 1RM • ` : ''}${projection.source}${projection.e1rm ? ` • e1RM ${projection.e1rm}kg` : ''}
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                </section>
-
-                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
-                    <h3 class="text-lg font-bold text-white mb-3"><i class="fa-solid fa-layer-group mr-2 text-neon"></i>Skill Progress</h3>
-                    <div class="space-y-2">
-                        ${skillRows.map(([key, label]) => {
-                            const skillExercise = exercises.find((ex) => exercisePlannerMeta[ex.id]?.skill === key);
-                            const plan = getProjectedSkillPlan(key, selectedWeek, rules, skillExercise ? getPlannerInput(skillExercise.id) : {});
-                            return `
-                                <div class="rounded-lg bg-gray-800 p-3 text-xs">
-                                    <div class="flex items-center justify-between gap-3">
-                                        <span class="font-bold text-gray-100">${label}</span>
-                                        <span class="font-extrabold text-power">L${plan.level}</span>
-                                    </div>
-                                    <div class="mt-1 text-gray-300">${plan.drill}</div>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                </section>
-            </div>
-        `;
-        document.getElementById('main-content').innerHTML = html;
-    }
-
-    function applyExerciseBaseline(id) {
-        const ex = findExerciseById(id);
-        if (!ex) return;
-        const weekNumber = getCurrentWeek(progressionRules);
-        const input = exerciseInputs[id] || {};
-        const target = getBaselinePlanTarget(ex, weekNumber, progressionRules, input);
-        if (target && Object.keys(target).length) planTargets[id] = target;
-        delete userLogs[id];
-        doneToday[id] = false;
-        saveData();
-    }
-
-    function renderInputs() {
-        const weekNumber = getCurrentWeek(progressionRules);
-        const exercises = getAllExercisesWithDay().filter((ex) => ex.order !== 'W');
-        const html = `
-            <div class="space-y-4 pb-6">
-                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
-                    <h2 class="text-xl font-bold text-white mb-1"><i class="fa-solid fa-table-list mr-2 text-neon"></i>Exercise Inputs</h2>
-                    <p class="mb-4 text-xs text-gray-400">Edit a baseline row to recalculate that exercise from week ${weekNumber} and restart its target tracking.</p>
-                    <div class="space-y-3">
-                        ${exercises.map((ex) => {
-                            const input = exerciseInputs[ex.id] || {};
-                            const meta = exercisePlannerMeta[ex.id] || {};
-                            const projection = getProjectedLoadPlan(ex, weekNumber, progressionRules, input);
-                            const target = getBaselinePlanTarget(ex, weekNumber, progressionRules, input);
-                            const isSkill = meta.type === 'Skill';
-                            return `
-                                <div class="rounded-lg bg-gray-800 p-3 text-xs">
-                                    <div class="mb-2 flex items-start justify-between gap-3">
-                                        <div>
-                                            <div class="font-bold text-gray-100">${ex.dayTitle.replace(' â€” ', ' ')} • ${ex.order} ${ex.name}</div>
-                                            <div class="text-gray-400">${projection.type} • ${projection.source}</div>
-                                        </div>
-                                        <div class="text-right font-extrabold text-power">${targetSummary(target) || projection.type}</div>
-                                    </div>
-                                    ${isSkill ? `
-                                        <div class="flex flex-wrap justify-end gap-2">
-                                            <input type="number" min="0" max="3" step="1" placeholder="Level" class="track-input planner-input" data-id="${ex.id}" data-field="skillLevel" value="${input.skillLevel || ''}">
-                                        </div>
-                                    ` : `
-                                        <div class="flex flex-wrap justify-end gap-2">
-                                            <input type="text" placeholder="load" class="track-input planner-input" data-id="${ex.id}" data-field="currentLoad" value="${input.currentLoad || ''}">
-                                            <input type="text" placeholder="reps" class="track-input planner-input" data-id="${ex.id}" data-field="currentReps" value="${input.currentReps || ''}">
-                                            <input type="text" placeholder="RIR" class="track-input planner-input" data-id="${ex.id}" data-field="rir" value="${input.rir || ''}">
-                                            <input type="text" placeholder="e1RM" class="track-input planner-input" data-id="${ex.id}" data-field="directE1RM" value="${input.directE1RM || ''}">
-                                        </div>
-                                    `}
-                                    <div class="mt-2 text-gray-300">
-                                        ${projection.percent ? `${Math.round(projection.percent * 100)}% 1RM • ` : ''}${projection.load ? `planned ${projection.load}kg • ` : ''}${projection.e1rm ? `e1RM ${projection.e1rm}kg • ` : ''}${projection.phase}${projection.deload ? ' • deload' : ' • build'}
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                </section>
-            </div>
-        `;
-        document.getElementById('main-content').innerHTML = html;
-    }
-
-    function renderRules() {
-        const rules = { ...getDefaultRules(), ...progressionRules };
-        const groups = [
-            {
-                title: 'Global Inputs',
-                rows: [
-                    { key: 'bodyweightKg', label: 'Bodyweight', suffix: 'kg', step: '0.5' },
-                    { key: 'planWeeks', label: 'Plan length', suffix: 'weeks', step: '1' },
-                    { key: 'startDate', label: 'Start date', suffix: '', type: 'date' },
-                    { key: 'selectedWeek', label: 'Week view', suffix: 'week', step: '1' },
-                    { key: 'defaultRir', label: 'Default RIR', suffix: 'RIR', step: '1' }
-                ]
-            },
-            {
-                title: 'Progression Rules',
-                rows: [
-                    { key: 'repStep', label: 'Rep step', suffix: 'rep', step: '1' },
-                    { key: 'holdStep', label: 'Hold step', suffix: 'sec', step: '1' },
-                    { key: 'upperIncrementKg', label: 'Upper increment', suffix: 'kg', step: '0.5' },
-                    { key: 'lowerIncrementKg', label: 'Lower increment', suffix: 'kg', step: '0.5' },
-                    { key: 'accessoryIncrementKg', label: 'Accessory increment', suffix: 'kg', step: '0.5' },
-                    { key: 'deloadEveryWeeks', label: 'Deload every', suffix: 'weeks', step: '1' },
-                    { key: 'deloadLoadFactor', label: 'Deload load factor', suffix: 'x', step: '0.05' },
-                    { key: 'deloadSetFactor', label: 'Deload set factor', suffix: 'x', step: '0.05' }
-                ]
-            },
-            {
-                title: 'Weekly % Steps',
-                rows: [
-                    { key: 'strengthWeeklyPct', label: 'Strength +%', suffix: '/week', step: '0.005' },
-                    { key: 'hypertrophyWeeklyPct', label: 'Hypertrophy +%', suffix: '/week', step: '0.005' },
-                    { key: 'isolationWeeklyPct', label: 'Isolation +%', suffix: '/week', step: '0.005' },
-                    { key: 'powerWeeklyPct', label: 'Power +%', suffix: '/week', step: '0.005' }
-                ]
-            },
-            {
-                title: '1RM / e1RM Anchors',
-                rows: [
-                    { key: 'benchAnchor1RM', label: 'Bench press', suffix: 'kg', step: '0.5' },
-                    { key: 'squatAnchor1RM', label: 'Squat / leg press', suffix: 'kg', step: '0.5' },
-                    { key: 'deadliftAnchor1RM', label: 'Deadlift / trap bar', suffix: 'kg', step: '0.5' },
-                    { key: 'overheadPressAnchor1RM', label: 'Overhead press', suffix: 'kg', step: '0.5' },
-                    { key: 'pullupAdded1RM', label: 'Pull-up added 1RM', suffix: 'kg', step: '0.5' },
-                    { key: 'rowAnchor1RM', label: 'Row', suffix: 'kg', step: '0.5' }
-                ]
-            },
-            {
-                title: 'Starting Skill Levels',
-                rows: [
-                    { key: 'skillWeeksPerLevel', label: 'Level window', suffix: 'weeks', step: '1' },
-                    { key: 'handstandLevel', label: 'Handstand / HSPU', suffix: 'L0-3', step: '1' },
-                    { key: 'pullSkillLevel', label: 'Pull / muscle-up', suffix: 'L0-3', step: '1' },
-                    { key: 'ringDipLevel', label: 'Ring / dip', suffix: 'L0-3', step: '1' },
-                    { key: 'pistolLevel', label: 'Pistol', suffix: 'L0-3', step: '1' },
-                    { key: 'frontLeverLevel', label: 'Front lever', suffix: 'L0-3', step: '1' },
-                    { key: 'lSitLevel', label: 'L-sit', suffix: 'L0-3', step: '1' }
-                ]
-            }
-        ];
-
-        const html = `
-            <div class="space-y-4 pb-6">
-                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
-                    <h2 class="text-xl font-bold text-white mb-4"><i class="fa-solid fa-sliders mr-2 text-neon"></i>Rules</h2>
-                    <div class="space-y-5">
-                        ${groups.map((group) => `
-                            <div>
-                                <h3 class="mb-2 text-sm font-extrabold text-power">${group.title}</h3>
-                                <div class="space-y-2">
-                                    ${group.rows.map((row) => `
-                                        <label class="flex items-center justify-between gap-3 rounded-lg bg-gray-800 px-3 py-3">
-                                            <span class="text-sm font-semibold text-gray-200">${row.label}</span>
-                                            <span class="flex items-center gap-2">
-                                                <input type="${row.type || 'number'}" step="${row.step || '0.1'}" class="track-input rule-input" data-rule="${row.key}" value="${rules[row.key]}">
-                                                <span class="w-12 text-xs text-gray-400">${row.suffix}</span>
-                                            </span>
-                                        </label>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </section>
-
-                <section class="bg-gray-850 p-5 rounded-xl border border-gray-800">
-                    <h3 class="text-lg font-bold text-power mb-3"><i class="fa-solid fa-table-cells mr-2"></i>Planner Model</h3>
-                    <ul class="text-sm text-gray-300 space-y-2 list-disc pl-4">
-                        <li>Top clean: add load, then restart at bottom total reps.</li>
-                        <li>Not top: keep load and add the rep step to total clean reps.</li>
-                        <li>Holds: keep level and add the hold step until the target is clean.</li>
-                        <li>Pain, ugly reps, or speed drop: keep the current plan target.</li>
-                        <li>e1RM guide: load x (1 + (reps + RIR) / 30).</li>
-                    </ul>
-                </section>
-            </div>
-        `;
-        document.getElementById('main-content').innerHTML = html;
-    }
-
     function switchTab(tabId) {
+        const nextTab = planData[tabId] ? tabId : 'sun';
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.classList.remove('active', 'text-white', 'border-b-2', 'border-neon');
-            if (btn.dataset.tab === tabId) {
+            if (btn.dataset.tab === nextTab) {
                 btn.classList.add('active', 'text-white', 'border-b-2', 'border-neon');
             }
         });
 
-        if (tabId === 'info') renderInfo();
-        else if (tabId === 'inputs') renderInputs();
-        else if (tabId === 'week') renderWeekView();
-        else if (tabId === 'rules') renderRules();
-        else renderWorkout(tabId);
+        renderWorkout(nextTab);
     }
 
     // Event Delegation for Checkboxes and Inputs (Safe for all environments)
@@ -1213,16 +906,6 @@
     });
 
     document.getElementById('main-content').addEventListener('input', (e) => {
-        if (e.target.classList.contains('planner-input')) {
-            const id = e.target.dataset.id;
-            const field = e.target.dataset.field;
-            if (!exerciseInputs[id]) exerciseInputs[id] = {};
-            exerciseInputs[id][field] = e.target.value;
-            if (field === 'skillLevel' && e.target.value !== '') {
-                exerciseInputs[id][field] = String(clamp(Number(e.target.value), 0, 3));
-            }
-            applyExerciseBaseline(id);
-        }
         if (e.target.classList.contains('weight-input')) {
             const id = e.target.dataset.id;
             if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
@@ -1237,15 +920,6 @@
             if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
             userLogs[id].reps = e.target.value;
             syncExerciseInputFromWorkout(id, { reps: e.target.value });
-            saveNextTarget(id);
-            saveData();
-            updateNextAction(id);
-        }
-        if (e.target.classList.contains('rir-input')) {
-            const id = e.target.dataset.id;
-            if (!userLogs[id]) userLogs[id] = { weight: '', reps: '' };
-            userLogs[id].rir = e.target.value;
-            syncExerciseInputFromWorkout(id, { rir: e.target.value });
             saveNextTarget(id);
             saveData();
             updateNextAction(id);
@@ -1271,36 +945,6 @@
             saveNextTarget(id);
             saveData();
             updateNextAction(id);
-        }
-        if (e.target.classList.contains('rule-input')) {
-            const key = e.target.dataset.rule;
-            if (key === 'startDate') {
-                progressionRules[key] = e.target.value || getDefaultRules()[key];
-            } else {
-                let value = Number(e.target.value);
-                if (/Level$/.test(key)) value = clamp(value, 0, 3);
-                if (key === 'selectedWeek') value = clamp(value, 1, Number(progressionRules.planWeeks || getDefaultRules().planWeeks));
-                progressionRules[key] = Number.isFinite(value) ? value : getDefaultRules()[key];
-            }
-            saveRules();
-            saveData();
-            renderRules();
-        }
-        if (e.target.classList.contains('planner-input')) {
-            const id = e.target.dataset.id;
-            const field = e.target.dataset.field;
-            if (!exerciseInputs[id]) exerciseInputs[id] = {};
-            exerciseInputs[id][field] = e.target.value;
-            if (field === 'skillLevel' && e.target.value !== '') {
-                exerciseInputs[id][field] = String(clamp(Number(e.target.value), 0, 3));
-            }
-            applyExerciseBaseline(id);
-        }
-        if (e.target.classList.contains('week-input')) {
-            const maxWeek = Number(progressionRules.planWeeks || getDefaultRules().planWeeks);
-            progressionRules.selectedWeek = clamp(Number(e.target.value) || 1, 1, maxWeek);
-            saveRules();
-            renderWeekView();
         }
     });
 
